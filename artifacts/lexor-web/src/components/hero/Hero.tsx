@@ -53,7 +53,7 @@ export function Hero() {
         </motion.div>
 
         <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl font-semibold leading-[1.05] tracking-tight">
-          <BlurFadeWords text={BRAND.tagline[locale]} />
+          <BlurFadeWords text={t("brand.tagline")} />
         </h1>
 
         <motion.p
@@ -62,7 +62,7 @@ export function Hero() {
           transition={{ duration: reduced ? 0.2 : 0.6, delay: reduced ? 0 : 0.55, ease: [0.16, 1, 0.3, 1] }}
           className="mt-6 sm:mt-8 max-w-2xl mx-auto text-base sm:text-lg text-fg-muted leading-relaxed"
         >
-          {BRAND.subTagline[locale]}
+          {t("brand.subtagline")}
         </motion.p>
 
         <motion.div

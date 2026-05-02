@@ -5,8 +5,8 @@ import { BRAND } from "@/lib/brand";
 import { useT } from "@/lib/i18n";
 
 export default function Home() {
-  const { locale } = useT();
-  useDocumentTitle(`${BRAND.name} — ${BRAND.tagline[locale]}`);
+  const { t } = useT();
+  useDocumentTitle(`${BRAND.name} — ${t("brand.tagline")}`);
   return (
     <>
       <Hero />

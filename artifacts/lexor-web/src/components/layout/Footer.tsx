@@ -1,14 +1,13 @@
 import { Link } from "wouter";
 import { useT } from "@/lib/i18n";
-import { BRAND } from "@/lib/brand";
 
 export function Footer() {
-  const { t, locale } = useT();
+  const { t } = useT();
   return (
     <footer className="border-t border-border bg-bg-elevated/40">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-fg-muted">
         <p className="leading-relaxed max-w-2xl" data-testid="text-footer-banner">
-          {BRAND.footer[locale]}
+          {t("brand.footer")}
         </p>
         <nav className="flex items-center gap-4">
           <Link href="/legal/disclaimer" className="hover:text-fg transition-colors">
