@@ -22,8 +22,9 @@ export function Header() {
         <nav className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/legal/disclaimer#find-attorney"
-            className="hidden sm:inline-flex items-center text-sm text-fg-muted hover:text-fg transition-colors"
+            className="inline-flex items-center text-xs sm:text-sm text-fg-muted hover:text-fg transition-colors max-w-[10rem] sm:max-w-none truncate"
             data-testid="link-attorney"
+            title={t("header.attorney")}
           >
             {t("header.attorney")}
           </Link>
