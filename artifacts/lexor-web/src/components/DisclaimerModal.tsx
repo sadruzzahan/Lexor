@@ -1,7 +1,6 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useDisclaimer } from "@/lib/disclaimer";
 import { useT } from "@/lib/i18n";
-import { BRAND } from "@/lib/brand";
 
 export function DisclaimerModal() {
   const open = useDisclaimer((s) => s.open);
@@ -67,7 +66,7 @@ export function DisclaimerModal() {
           </div>
 
           <p className="mt-4 text-[11px] text-fg-subtle font-mono">
-            {BRAND.name.toLowerCase()} · v1
+            {t("modal.version")}
           </p>
         </Dialog.Content>
       </Dialog.Portal>

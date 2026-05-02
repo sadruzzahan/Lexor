@@ -15,7 +15,7 @@ export function Header() {
           <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full bg-accent" />
           <span>{BRAND.name}</span>
           <span className="text-fg-subtle text-xs uppercase tracking-widest hidden sm:inline">
-            by {BRAND.parent}
+            {t("header.parent")}
           </span>
         </Link>
 
@@ -43,7 +43,7 @@ export function Header() {
             type="button"
             onClick={() => openCmd(true)}
             className="ghost-btn hidden md:inline-flex items-center gap-2 px-2.5 py-1.5 rounded-base"
-            aria-label="Open command palette"
+            aria-label={t("header.cmdk.aria")}
             data-testid="button-cmdk"
           >
             <Command className="h-3.5 w-3.5" />

@@ -3,9 +3,7 @@ import { BRAND } from "./brand";
 
 export type Locale = "en" | "es";
 
-type Dict = Record<string, string>;
-
-const en: Dict = {
+const en = {
   "nav.home": "Home",
   "nav.upload": "Upload",
   "nav.map": "Map",
@@ -18,6 +16,11 @@ const en: Dict = {
   "header.attorney": "Talk to a licensed attorney",
   "header.cmd": "Press ⌘K",
   "header.lang": "Language",
+  "header.cmdk.aria": "Open command palette",
+  "header.parent": `by ${BRAND.parent}`,
+  "hero.live": "live",
+  "modal.version": `${BRAND.name.toLowerCase()} · v1`,
+  "nav.mobile.aria": "Primary mobile",
   "hero.cta.primary": "Upload a letter",
   "hero.cta.secondary": "Or call",
   "section.bento.heading": "Built for the people the system overcharges.",
@@ -80,7 +83,10 @@ const en: Dict = {
   "notfound.title": "Page not found",
   "notfound.body": "That page is not part of the build yet — check the menu or the command palette.",
   "notfound.cta": "Back to home",
-};
+} as const;
+
+export type TKey = keyof typeof en;
+type Dict = Record<TKey, string>;
 
 const es: Dict = {
   "nav.home": "Inicio",
@@ -95,6 +101,11 @@ const es: Dict = {
   "header.attorney": "Habla con un abogado licenciado",
   "header.cmd": "Pulsa ⌘K",
   "header.lang": "Idioma",
+  "header.cmdk.aria": "Abrir paleta de comandos",
+  "header.parent": `por ${BRAND.parent}`,
+  "hero.live": "en vivo",
+  "modal.version": `${BRAND.name.toLowerCase()} · v1`,
+  "nav.mobile.aria": "Navegación móvil",
   "hero.cta.primary": "Subir una carta",
   "hero.cta.secondary": "O llama al",
   "section.bento.heading": "Hecho para las personas a quienes el sistema cobra de más.",
@@ -160,6 +171,7 @@ const es: Dict = {
 };
 
 const dictionaries: Record<Locale, Dict> = { en, es };
+export const dict = en;
 const STORAGE_KEY = "lexor.locale";
 
 function detectInitial(): Locale {
@@ -174,7 +186,7 @@ interface I18nContextValue {
   locale: Locale;
   setLocale: (l: Locale) => void;
   toggleLocale: () => void;
-  t: (key: keyof typeof en) => string;
+  t: (key: TKey) => string;
 }
 
 const I18nContext = createContext<I18nContextValue | null>(null);
@@ -195,7 +207,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   );
 
   const t = useCallback(
-    (key: keyof typeof en) => dictionaries[locale][key] ?? dictionaries.en[key] ?? String(key),
+    (key: TKey) => dictionaries[locale][key] ?? dictionaries.en[key] ?? String(key),
     [locale],
   );
 

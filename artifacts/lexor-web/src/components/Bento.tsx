@@ -10,19 +10,32 @@ import {
   Gavel,
   Quote,
 } from "lucide-react";
-import { useT } from "@/lib/i18n";
+import { useT, type TKey } from "@/lib/i18n";
 import { useReducedMotionPref } from "@/lib/hooks";
 
-const FEATURES = [
-  { k: 1, span: "md:col-span-2 md:row-span-2", icon: FileScan },
-  { k: 2, span: "md:col-span-2", icon: ScanSearch },
-  { k: 3, span: "md:col-span-2", icon: MapPinned },
-  { k: 4, span: "", icon: Users2 },
-  { k: 5, span: "", icon: PhoneCall },
-  { k: 6, span: "md:col-span-2", icon: BookOpenCheck },
-  { k: 7, span: "", icon: Gavel },
-  { k: 8, span: "", icon: Quote },
-] as const;
+interface BentoFeature {
+  k: number;
+  span: string;
+  icon: typeof FileScan;
+  titleKey: TKey;
+  descKey: TKey;
+}
+
+const FEATURES: ReadonlyArray<BentoFeature> = [
+  { k: 1, span: "md:col-span-2 md:row-span-2", icon: FileScan, titleKey: "bento.1.title", descKey: "bento.1.desc" },
+  { k: 2, span: "md:col-span-2", icon: ScanSearch, titleKey: "bento.2.title", descKey: "bento.2.desc" },
+  { k: 3, span: "md:col-span-2", icon: MapPinned, titleKey: "bento.3.title", descKey: "bento.3.desc" },
+  { k: 4, span: "", icon: Users2, titleKey: "bento.4.title", descKey: "bento.4.desc" },
+  { k: 5, span: "", icon: PhoneCall, titleKey: "bento.5.title", descKey: "bento.5.desc" },
+  { k: 6, span: "md:col-span-2", icon: BookOpenCheck, titleKey: "bento.6.title", descKey: "bento.6.desc" },
+  { k: 7, span: "", icon: Gavel, titleKey: "bento.7.title", descKey: "bento.7.desc" },
+  { k: 8, span: "", icon: Quote, titleKey: "bento.8.title", descKey: "bento.8.desc" },
+];
+
+interface SplitInstance {
+  words: HTMLElement[];
+  revert?: () => void;
+}
 
 export function Bento() {
   const { t } = useT();
@@ -34,28 +47,34 @@ export function Bento() {
     let cleanup = () => {};
     let cancelled = false;
     (async () => {
-      const [{ default: gsap }, { ScrollTrigger }, splitMod] = await Promise.all([
+      const [{ default: gsap }, { ScrollTrigger }] = await Promise.all([
         import("gsap"),
         import("gsap/ScrollTrigger"),
-        import("gsap/SplitText").catch(() => null as any),
       ]);
+      type SplitTextCtor = new (target: Element, opts: { type: string }) => SplitInstance;
+      let SplitTextCtor: SplitTextCtor | null = null;
+      try {
+        const splitMod = await import("gsap/SplitText");
+        SplitTextCtor = (splitMod.SplitText as unknown) as SplitTextCtor;
+      } catch {
+        SplitTextCtor = null;
+      }
       if (cancelled || !headingRef.current) return;
       gsap.registerPlugin(ScrollTrigger);
-      const SplitText = splitMod?.SplitText;
 
       let words: HTMLElement[] = [];
-      let split: any = null;
-      if (SplitText) {
+      let split: SplitInstance | null = null;
+      if (SplitTextCtor) {
         try {
-          gsap.registerPlugin(SplitText);
-          split = new SplitText(headingRef.current, { type: "words" });
-          words = split.words as HTMLElement[];
+          gsap.registerPlugin(SplitTextCtor as unknown as gsap.Plugin);
+          const instance = new SplitTextCtor(headingRef.current, { type: "words" });
+          split = instance;
+          words = instance.words;
         } catch {
           words = [];
         }
       }
       if (words.length === 0) {
-        // manual fallback: wrap each word in a span
         const text = headingRef.current.textContent ?? "";
         headingRef.current.innerHTML = text
           .split(" ")
@@ -102,7 +121,7 @@ export function Bento() {
       <p className="mt-4 text-fg-muted max-w-2xl">{t("about.lead")}</p>
 
       <div className="mt-10 grid grid-cols-1 md:grid-cols-4 md:auto-rows-[12rem] gap-3 sm:gap-4">
-        {FEATURES.map(({ k, span, icon: Icon }, i) => (
+        {FEATURES.map(({ k, span, icon: Icon, titleKey, descKey }, i) => (
           <motion.article
             key={k}
             initial={reduced ? { opacity: 0 } : { opacity: 0, y: 16 }}
@@ -125,21 +144,22 @@ export function Bento() {
               <Icon className="h-5 w-5 text-fg-muted group-hover:text-accent transition-colors" />
             </div>
             <h3 className="mt-6 font-display text-lg sm:text-xl font-semibold tracking-tight">
-              {t(`bento.${k}.title` as any)}
+              {t(titleKey)}
             </h3>
-            <p className="mt-2 text-sm text-fg-muted leading-relaxed">
-              {t(`bento.${k}.desc` as any)}
-            </p>
+            <p className="mt-2 text-sm text-fg-muted leading-relaxed">{t(descKey)}</p>
 
-            {/* placeholder micro-demo slot */}
             <div className="absolute inset-x-5 bottom-5 h-1 rounded-full bg-bg-raised overflow-hidden">
-              <motion.div
-                aria-hidden
-                className="h-full bg-accent/70"
-                initial={{ width: "10%" }}
-                animate={reduced ? { width: "30%" } : { width: ["10%", "70%", "30%"] }}
-                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: i * 0.3 }}
-              />
+              {reduced ? (
+                <div aria-hidden className="h-full bg-accent/70" style={{ width: "30%" }} />
+              ) : (
+                <motion.div
+                  aria-hidden
+                  className="h-full bg-accent/70"
+                  initial={{ width: "10%" }}
+                  animate={{ width: ["10%", "70%", "30%"] }}
+                  transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: i * 0.3 }}
+                />
+              )}
             </div>
           </motion.article>
         ))}

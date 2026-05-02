@@ -48,7 +48,7 @@ export function Hero() {
         >
           <span className="pulse-dot" aria-hidden />
           <span>
-            {BRAND.name} · {locale.toUpperCase()} · live
+            {BRAND.name} · {locale.toUpperCase()} · {t("hero.live")}
           </span>
         </motion.div>
 
@@ -58,8 +58,8 @@ export function Hero() {
 
         <motion.p
           initial={reduced ? { opacity: 0 } : { opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.55, ease: [0.16, 1, 0.3, 1] }}
+          animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0 }}
+          transition={{ duration: reduced ? 0.2 : 0.6, delay: reduced ? 0 : 0.55, ease: [0.16, 1, 0.3, 1] }}
           className="mt-6 sm:mt-8 max-w-2xl mx-auto text-base sm:text-lg text-fg-muted leading-relaxed"
         >
           {BRAND.subTagline[locale]}

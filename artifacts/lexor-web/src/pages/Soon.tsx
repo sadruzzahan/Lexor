@@ -1,10 +1,10 @@
 import type { ComponentType } from "react";
 import { useDocumentTitle } from "@/lib/hooks";
-import { useT } from "@/lib/i18n";
+import { useT, type TKey } from "@/lib/i18n";
 import { BRAND } from "@/lib/brand";
 
 interface SoonProps {
-  titleKey: Parameters<ReturnType<typeof useT>["t"]>[0];
+  titleKey: TKey;
   Icon: ComponentType<{ className?: string }>;
 }
 

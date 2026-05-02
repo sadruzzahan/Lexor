@@ -1,21 +1,26 @@
 import { Link, useLocation } from "wouter";
 import { Home, Upload, MapPin, PhoneCall, User } from "lucide-react";
-import { useT } from "@/lib/i18n";
+import { useT, type TKey } from "@/lib/i18n";
 
-const tabs = [
+const tabs: ReadonlyArray<{
+  href: string;
+  label: TKey;
+  icon: typeof Home;
+  key: string;
+}> = [
   { href: "/", label: "nav.home", icon: Home, key: "home" },
   { href: "/upload", label: "nav.upload", icon: Upload, key: "upload" },
   { href: "/map", label: "nav.map", icon: MapPin, key: "map" },
   { href: "/voice", label: "nav.voice", icon: PhoneCall, key: "voice" },
   { href: "/about", label: "nav.account", icon: User, key: "account" },
-] as const;
+];
 
 export function MobileTabBar() {
   const { t } = useT();
   const [location] = useLocation();
   return (
     <nav
-      aria-label="Primary mobile"
+      aria-label={t("nav.mobile.aria")}
       className="md:hidden fixed bottom-0 inset-x-0 z-30 border-t border-border bg-bg/90 backdrop-blur"
     >
       <ul className="grid grid-cols-5">
@@ -30,7 +35,7 @@ export function MobileTabBar() {
                 style={{ color: active ? "var(--color-accent)" : "var(--color-fg-muted)" }}
               >
                 <Icon className="h-5 w-5" aria-hidden />
-                <span>{t(label as any)}</span>
+                <span>{t(label)}</span>
               </Link>
             </li>
           );
