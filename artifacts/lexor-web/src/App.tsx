@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { Toaster } from "sonner";
+import { useDisclaimer } from "@/lib/disclaimer";
 import {
   Upload as UploadIcon,
   FileText,
@@ -53,6 +55,15 @@ function Router() {
 
 function App() {
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+  const heartbeat = useDisclaimer((s) => s.heartbeat);
+  useEffect(() => {
+    heartbeat();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") heartbeat();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [heartbeat]);
   return (
     <I18nProvider>
       <WouterRouter base={base}>
