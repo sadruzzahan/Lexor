@@ -1,0 +1,27 @@
+import { Link } from "wouter";
+import { useT } from "@/lib/i18n";
+import { BRAND } from "@/lib/brand";
+
+export function Footer() {
+  const { t, locale } = useT();
+  return (
+    <footer className="border-t border-border bg-bg-elevated/40">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-fg-muted">
+        <p className="leading-relaxed max-w-2xl" data-testid="text-footer-banner">
+          {BRAND.footer[locale]}
+        </p>
+        <nav className="flex items-center gap-4">
+          <Link href="/legal/disclaimer" className="hover:text-fg transition-colors">
+            {t("footer.disclaimer.link")}
+          </Link>
+          <Link href="/about" className="hover:text-fg transition-colors">
+            {t("footer.about.link")}
+          </Link>
+          <a href="#privacy" className="hover:text-fg transition-colors">
+            {t("footer.privacy.link")}
+          </a>
+        </nav>
+      </div>
+    </footer>
+  );
+}

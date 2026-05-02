@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Lexor"
+version = "1.0.0"
+id = "artifacts/lexor-web"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20325
+
+[services.development]
+run = "pnpm --filter @workspace/lexor-web run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lexor-web", "run", "build" ]
+publicDir = "artifacts/lexor-web/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20325"
+BASE_PATH = "/"
