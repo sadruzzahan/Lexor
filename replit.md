@@ -25,3 +25,33 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Lexor (artifacts/lexor-web + extensions in artifacts/api-server)
+
+Consumer legal-help web app under the parent brand "zexorex". Feature 1
+(Defend + Counter-attack) is a synchronous-feel async pipeline:
+vision → classify → grounding → rules → draft → complaints → embedding
+→ adversary → coalition, streamed to the client over SSE.
+
+### Documented product behavior / drift
+
+- **Statute corpus is curated, not live.** No CourtListener / govinfo
+  fetches; we ship a hand-verified CA / TX / NY + federal FDCPA / FLSA
+  corpus baked into `services/grounding/statutes.ts`. The "grounding"
+  pipeline step is a passthrough that surfaces which corpus the
+  rules engine will draw from.
+- **Tier-1 regulator filing is guided-portal, not direct submit.** The
+  UI deep-links to the agency portal and provides copy/paste-ready
+  draft text. We do not POST to HUD/CFPB/FTC/EEOC/DOL_WHD on the
+  user's behalf. Tier-2 (state AGs) is PDF + mailing instructions.
+  Replace with direct-submit integrations only after legal review.
+- **Vision handwriting fallback uses Anthropic for both passes.** Build
+  plan §3.2 calls for a GPT-4o second pass; OpenAI integration is not
+  wired into this workspace, so both passes run through Anthropic. Swap
+  point is isolated to the second `runVisionPass(...)` call in
+  `services/vision.ts`.
+- **"Download PDF" is HTML print-to-PDF**, not a true PDF binary.
+- **Embedding step is a sha256 fingerprint placeholder**; real pgvector
+  work lands with the coalition feature.
+- **45s fixture latency target is operational, not test-enforced.** No
+  automated test gate fails a build that exceeds the budget.

@@ -5,8 +5,8 @@ import type { PipelineEvent } from "@/lib/sse";
 const STEP_LABEL: Record<string, string> = {
   vision: "Reading your letter",
   classify: "Identifying the document type",
-  rules: "Checking what they did wrong",
   grounding: "Locating your rights",
+  rules: "Checking what they did wrong",
   draft: "Drafting your response",
   complaints: "Preparing regulator complaints",
   embedding: "Indexing your case",
@@ -17,8 +17,8 @@ const STEP_LABEL: Record<string, string> = {
 const STEP_ORDER = [
   "vision",
   "classify",
-  "rules",
   "grounding",
+  "rules",
   "draft",
   "complaints",
   "embedding",

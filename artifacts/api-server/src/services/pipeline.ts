@@ -199,19 +199,23 @@ export async function runPipeline(caseId: string): Promise<void> {
       })
       .where(eq(casesTable.id, caseId));
 
-    // 3. Rules → 4. Grounding (curated; baked into rule output)
+    // 3. Grounding → 4. Rules. Grounding is "locate the laws that protect
+    // you" (the curated statute corpus we ship), rules is "match those
+    // laws against what they did". Surfacing grounding first matches the
+    // product narrative even though our curated statutes are baked into
+    // the rule output and the actual work happens inside runRules.
+    await step(
+      caseId,
+      "grounding",
+      async () => null,
+      () => ({ corpus: `${jurisdiction ?? "FED"}+federal`, vertical }),
+    );
+
     const violations = await step(
       caseId,
       "rules",
       async () => runRules(extraction, vertical, jurisdiction),
       (vs) => ({ count: vs.length, codes: vs.map((v) => v.code) }),
-    );
-
-    await step(
-      caseId,
-      "grounding",
-      async () => violations.length,
-      () => ({ groundedCount: violations.length }),
     );
 
     // 5. Draft response letter
