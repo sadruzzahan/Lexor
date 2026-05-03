@@ -9,6 +9,7 @@ import {
   entitiesTable,
   disclosuresTable,
   notificationsTable,
+  sessionsTable,
 } from "@workspace/db";
 import { and, eq, desc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -467,22 +468,78 @@ router.post(
       throw new HttpError(500, "internal_error", "Winning bid is missing.");
     }
 
-    // Pull every opted-in member and their case userId so the lawyer can
-    // be handed a real contact list. Anonymous opt-ins surface as caseId
-    // only — the lawyer can route those through Lexor for follow-up.
-    const consented = await db
+    // Pull every opted-in member with the actionable contact channels we
+    // hold. We expose:
+    //   - caseId               (always — the routing key the lawyer uses
+    //                          to reply via Lexor's controlled inbox)
+    //   - userId               (Clerk user id when the case is owned, so
+    //                          the lawyer's outreach can resolve to a
+    //                          verified user identity on our side)
+    //   - inboxUrl             (the Lexor-hosted inbox URL the lawyer
+    //                          should send substantive comms through —
+    //                          this is the canonical lawful channel)
+    //   - whatsappPhoneHash    (the *hashed* phone for any case that
+    //                          previously initiated WhatsApp comms; the
+    //                          lawyer cannot dial a hash, but it lets a
+    //                          subsequent operator-side delivery worker
+    //                          look up and reach the user via the same
+    //                          consented WhatsApp channel)
+    //   - language             (so outreach is translated correctly)
+    // PII like raw phone numbers and email addresses are intentionally
+    // never returned over HTTP nor placed in the lawyer-visible payload;
+    // the operator-side delivery worker is the only system that ever
+    // resolves a hash to a number.
+    const consentedRaw = await db
       .select({
         caseId: coalitionMembersTable.caseId,
         userId: casesTable.userId,
+        language: casesTable.language,
+        sessionPhoneHash: sessionsTable.phoneNumberHash,
+        sessionChannel: sessionsTable.channel,
       })
       .from(coalitionMembersTable)
       .innerJoin(casesTable, eq(coalitionMembersTable.caseId, casesTable.id))
+      .leftJoin(sessionsTable, eq(sessionsTable.caseId, casesTable.id))
       .where(
         and(
           eq(coalitionMembersTable.coalitionId, id),
           eq(coalitionMembersTable.hasOptedIn, true),
         ),
       );
+
+    // Collapse to one row per case (a case may have both voice and
+    // whatsapp sessions; we surface the WhatsApp hash when present).
+    const baseUrl =
+      (process.env.REPLIT_DOMAINS ?? "").split(",")[0]?.trim() ?? "";
+    const byCase = new Map<
+      string,
+      {
+        caseId: string;
+        userId: string | null;
+        language: string;
+        whatsappPhoneHash: string | null;
+        inboxUrl: string;
+      }
+    >();
+    for (const r of consentedRaw) {
+      const existing = byCase.get(r.caseId);
+      const wa =
+        r.sessionChannel === "whatsapp" ? r.sessionPhoneHash : null;
+      if (existing) {
+        existing.whatsappPhoneHash = existing.whatsappPhoneHash ?? wa;
+      } else {
+        byCase.set(r.caseId, {
+          caseId: r.caseId,
+          userId: r.userId,
+          language: r.language,
+          whatsappPhoneHash: wa,
+          inboxUrl: baseUrl
+            ? `https://${baseUrl}/c/${r.caseId}/inbox`
+            : `/c/${r.caseId}/inbox`,
+        });
+      }
+    }
+    const consented = Array.from(byCase.values());
 
     await db
       .update(coalitionsTable)
@@ -498,7 +555,7 @@ router.post(
       await db.insert(disclosuresTable).values(
         consented.map((m) => ({
           userId: m.userId,
-          sessionId: null,
+          sessionId: m.caseId,
           version: "coalition-winner-release-v1",
         })),
       );

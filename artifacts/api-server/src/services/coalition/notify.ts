@@ -121,15 +121,16 @@ export async function fanOutCoalitionInvites(coalitionId: string): Promise<{
       }
     }
 
-    // 3. WhatsApp — REQUIRES (a) an existing WhatsApp session for this
-    // case (we have a hashed phone, so the user previously opted into
-    // WhatsApp comms by initiating a session) AND (b) the member has
-    // explicitly opted into the coalition. Without both, we don't send.
-    // Member-specific routing: when a real per-member outbound number
-    // becomes available we'll thread it here; for now an explicit
-    // `LEXOR_WA_TEST_NUMBER` is the only sanctioned destination. If
-    // unset, we skip the send and log the policy decision.
-    if (!m.hasOptedIn) continue;
+    // 3. WhatsApp INVITE — this is the channel we use to *ask* a member to
+    // join the coalition, so it MUST fire before opt-in. Eligibility is:
+    //   (a) the case has an existing WhatsApp session — meaning the user
+    //       previously initiated WhatsApp contact with us, which is the
+    //       inbound consent for outbound WhatsApp comms, AND
+    //   (b) we hold a hashed phone for that session (the routing key).
+    // Member-specific outbound routing: when per-member numbers become
+    // available we'll thread them here; today the only sanctioned
+    // destination is `LEXOR_WA_TEST_NUMBER`. If unset, we skip the send
+    // and log the policy decision (we still recorded the in-app row).
     try {
       const [sess] = await db
         .select({ phoneNumberHash: sessionsTable.phoneNumberHash })

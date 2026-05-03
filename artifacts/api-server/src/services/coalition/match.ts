@@ -139,6 +139,15 @@ export async function matchOrFormCoalition(
       { coalitionId: existing.id, caseId, count },
       "case attached to existing coalition",
     );
+    // Re-fan-out invites so the newly attached member receives the
+    // coalition invite (in-app + WhatsApp where eligible). The fan-out
+    // is rate-capped per-coalition so this won't spam existing members.
+    fanOutCoalitionInvites(existing.id).catch((err) =>
+      logger.warn(
+        { err, coalitionId: existing.id },
+        "fan-out on join failed",
+      ),
+    );
     return {
       coalitionId: existing.id,
       matchedCaseIds: [self.id],
