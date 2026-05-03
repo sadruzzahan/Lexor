@@ -132,27 +132,46 @@ export function DossierView({
         </div>
       </motion.header>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Total cases" value={stats.totalCases.toLocaleString()} icon={Scale} />
-        <Stat
-          label="As plaintiff"
-          value={stats.asPlaintiff.toLocaleString()}
-          sub={`${stats.asDefendant.toLocaleString()} as defendant`}
-          icon={Gavel}
-        />
-        <Stat
-          label="Their win rate (when sued)"
-          value={`${Math.round(stats.winRatePctAsDefendant)}%`}
-          sub="lower means more wins for plaintiffs"
-          icon={ShieldCheck}
-          tone="accent"
-        />
-        <Stat
-          label="Sanctions on record"
-          value={stats.sanctions.length.toString()}
-          icon={AlertOctagon}
-          tone={stats.sanctions.length > 0 ? "violation" : "neutral"}
-        />
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="md:col-span-1 rounded-lg2 border border-border-strong bg-bg-elevated p-5 flex items-center gap-4">
+          <WinRateRing pct={stats.winRatePctAsDefendant} />
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-wider text-fg-subtle">
+              Their win rate (when sued)
+            </div>
+            <div className="text-[11px] text-fg-muted mt-1">
+              Lower means more wins for plaintiffs like you. Out of{" "}
+              {stats.asDefendant.toLocaleString()} suits where they were the
+              defendant.
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:col-span-2">
+          <Stat
+            label="Total cases"
+            value={stats.totalCases.toLocaleString()}
+            icon={Scale}
+          />
+          <Stat
+            label="As plaintiff"
+            value={stats.asPlaintiff.toLocaleString()}
+            sub={`${stats.asDefendant.toLocaleString()} as defendant`}
+            icon={Gavel}
+          />
+          <Stat
+            label="Sanctions on record"
+            value={stats.sanctions.length.toString()}
+            icon={AlertOctagon}
+            tone={stats.sanctions.length > 0 ? "violation" : "neutral"}
+          />
+          <Stat
+            label="Defenses that worked"
+            value={dossier.defensesThatWorked.length.toString()}
+            sub="proven against this opponent"
+            icon={ShieldCheck}
+            tone="accent"
+          />
+        </div>
       </section>
 
       {stats.sanctions.length > 0 && (
@@ -237,43 +256,7 @@ export function DossierView({
       )}
 
       {dossier.timeline.length > 0 && (
-        <section className="rounded-lg2 border border-border-strong bg-bg-elevated p-5">
-          <div className="text-xs uppercase tracking-wider text-fg-subtle mb-4">
-            Timeline
-          </div>
-          <ol className="relative space-y-4 ml-2">
-            <span
-              aria-hidden
-              className="absolute left-1 top-1 bottom-1 w-px bg-border"
-            />
-            {dossier.timeline.map((t, i) => (
-              <li key={i} className="relative pl-6">
-                <span
-                  aria-hidden
-                  className="absolute left-0 top-1.5 size-2 rounded-full bg-accent"
-                />
-                <div className="text-xs text-fg-subtle tabular-nums">{t.date}</div>
-                <div className="text-sm text-fg mt-0.5">
-                  {t.url ? (
-                    <a
-                      href={t.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="hover:underline"
-                    >
-                      {t.label}
-                    </a>
-                  ) : (
-                    t.label
-                  )}
-                </div>
-                <div className="text-[10px] uppercase tracking-wider text-fg-subtle mt-0.5">
-                  {t.kind.replace("_", " ")}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
+        <HorizontalTimeline events={dossier.timeline} />
       )}
 
       {dossier.alternateNames.length > 0 && (
@@ -297,12 +280,12 @@ export function DossierView({
       {dossier.otherCases.length > 1 && (
         <section className="rounded-lg2 border border-accent/30 bg-accent/5 p-5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-accent">
-            <Users2 className="size-3.5" /> Other people Lexor connected
+            <Users2 className="size-3.5" /> Other people fighting them
           </div>
           <p className="mt-2 text-sm text-fg-muted">
             {dossier.otherCases.length} other Lexor users have uploaded a
             letter from this entity. A coalition forms automatically once
-            5+ cases hit the same adversary.
+            5+ cases hit the same adversary — you're stronger together.
           </p>
           <ul className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
             {dossier.otherCases.map((c, i) => (
@@ -319,9 +302,122 @@ export function DossierView({
               </li>
             ))}
           </ul>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Link
+              href={`/coalition/${dossier.entityId}`}
+              className="inline-flex items-center gap-2 rounded-base bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:opacity-90 transition"
+            >
+              <Users2 className="size-4" />
+              Form a coalition
+              <ArrowUpRight className="size-3.5" />
+            </Link>
+            <span className="text-xs text-fg-subtle">
+              {dossier.otherCases.length >= 5
+                ? "Threshold reached — coordinate joint action."
+                : `${5 - dossier.otherCases.length} more cases until automatic activation.`}
+            </span>
+          </div>
         </section>
       )}
     </div>
+  );
+}
+
+function WinRateRing({ pct }: { pct: number }) {
+  const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+  const r = 32;
+  const c = 2 * Math.PI * r;
+  const dash = (clamped / 100) * c;
+  // Lower win rate = better for plaintiff. Color shifts accent → violation.
+  const tone = clamped <= 40 ? "stroke-accent" : clamped <= 70 ? "stroke-fg-muted" : "stroke-violation";
+  return (
+    <div className="relative shrink-0" aria-label={`Win rate ${clamped} percent`}>
+      <svg width="84" height="84" viewBox="0 0 84 84" className="-rotate-90">
+        <circle
+          cx="42"
+          cy="42"
+          r={r}
+          strokeWidth="8"
+          fill="none"
+          className="stroke-border"
+        />
+        <motion.circle
+          cx="42"
+          cy="42"
+          r={r}
+          strokeWidth="8"
+          strokeLinecap="round"
+          fill="none"
+          className={tone}
+          strokeDasharray={`${dash} ${c}`}
+          initial={{ strokeDasharray: `0 ${c}` }}
+          animate={{ strokeDasharray: `${dash} ${c}` }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <div className="text-lg font-display tabular-nums text-fg">
+          {clamped}%
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HorizontalTimeline({
+  events,
+}: {
+  events: AdversaryDossier["timeline"];
+}) {
+  return (
+    <section className="rounded-lg2 border border-border-strong bg-bg-elevated p-5">
+      <div className="text-xs uppercase tracking-wider text-fg-subtle mb-4">
+        Major filings against them
+      </div>
+      <div className="relative overflow-x-auto">
+        <div
+          aria-hidden
+          className="absolute left-0 right-0 top-[34px] h-px bg-border"
+        />
+        <ol className="relative flex gap-6 pb-2 min-w-max">
+          {events.map((t, i) => (
+            <li key={i} className="relative w-44 shrink-0 pt-9">
+              <span
+                aria-hidden
+                className={`absolute left-1/2 -translate-x-1/2 top-[28px] size-3 rounded-full border-2 border-bg-elevated ${
+                  t.kind === "sanction" || t.kind === "consent_order"
+                    ? "bg-violation"
+                    : "bg-accent"
+                }`}
+              />
+              <div className="text-xs text-fg-subtle tabular-nums text-center">
+                {t.date}
+              </div>
+              <div className="mt-2 rounded-base border border-border bg-bg-raised p-3 text-xs">
+                <div className="text-fg leading-snug">
+                  {t.url ? (
+                    <a
+                      href={t.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:underline inline-flex items-start gap-1"
+                    >
+                      {t.label}
+                      <ExternalLink className="size-3 mt-0.5 shrink-0" />
+                    </a>
+                  ) : (
+                    t.label
+                  )}
+                </div>
+                <div className="mt-1 text-[10px] uppercase tracking-wider text-fg-subtle">
+                  {t.kind.replace("_", " ")}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </section>
   );
 }
 
