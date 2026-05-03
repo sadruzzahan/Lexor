@@ -15,18 +15,32 @@ const WINDOWS = [
   { id: null, label: "All time" },
 ] as const;
 
+const VIOLATIONS = [
+  { id: null, label: "Any" },
+  { id: "CA Civ Code §1946.2", label: "CA Just-Cause" },
+  { id: "FDCPA §1692e", label: "FDCPA misrep." },
+  { id: "FDCPA §1692g", label: "FDCPA validation" },
+  { id: "FLSA §207", label: "FLSA OT" },
+  { id: "TX Prop §92.0563", label: "TX Repair" },
+  { id: "NY RPL §235-b", label: "NY Habitability" },
+] as const;
+
 interface Props {
   vertical: string | null;
   sinceDays: number | null;
+  violation: string | null;
   onVertical: (v: string | null) => void;
   onSinceDays: (d: number | null) => void;
+  onViolation: (v: string | null) => void;
 }
 
 export function FilterPanel({
   vertical,
   sinceDays,
+  violation,
   onVertical,
   onSinceDays,
+  onViolation,
 }: Props) {
   return (
     <div className="rounded-xl2 border border-border-strong bg-bg-elevated/80 backdrop-blur-md p-4 w-72 shadow-xl">
@@ -61,7 +75,7 @@ export function FilterPanel({
       <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2">
         Time window
       </div>
-      <div className="flex gap-1.5">
+      <div className="flex gap-1.5 mb-5">
         {WINDOWS.map((w) => {
           const active = sinceDays === w.id;
           return (
@@ -76,6 +90,28 @@ export function FilterPanel({
               )}
             >
               {w.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="text-[10px] uppercase tracking-wider text-fg-subtle mb-2">
+        Violation
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {VIOLATIONS.map((v) => {
+          const active = violation === v.id;
+          return (
+            <button
+              key={v.label}
+              onClick={() => onViolation(v.id)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-[11px] transition-colors",
+                active
+                  ? "border-accent bg-accent/15 text-fg"
+                  : "border-border bg-bg/40 text-fg-muted hover:text-fg",
+              )}
+            >
+              {v.label}
             </button>
           );
         })}

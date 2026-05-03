@@ -16,19 +16,20 @@ export default function MapPage() {
   useDocumentTitle("Predator Map — Lexor");
   const [vertical, setVertical] = useState<string | null>(null);
   const [sinceDays, setSinceDays] = useState<number | null>(null);
+  const [violation, setViolation] = useState<string | null>(null);
   const [markers, setMarkers] = useState<MapMarkerCell[]>([]);
   const [stats, setStats] = useState<MapStats | null>(null);
   const [activeEntity, setActiveEntity] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    void getMapMarkers({ vertical, sinceDays }).then(
+    void getMapMarkers({ vertical, sinceDays, violation }).then(
       (m) => alive && setMarkers(m),
     );
     return () => {
       alive = false;
     };
-  }, [vertical, sinceDays]);
+  }, [vertical, sinceDays, violation]);
 
   useEffect(() => {
     let alive = true;
@@ -53,13 +54,15 @@ export default function MapPage() {
         <Leaderboard stats={stats} />
       </div>
 
-      {/* Filter panel */}
-      <div className="absolute top-4 left-4 z-10 hidden md:block">
+      {/* Filter panel — right-side per design spec */}
+      <div className="absolute top-4 right-4 z-10 hidden md:block">
         <FilterPanel
           vertical={vertical}
           sinceDays={sinceDays}
+          violation={violation}
           onVertical={setVertical}
           onSinceDays={setSinceDays}
+          onViolation={setViolation}
         />
       </div>
 

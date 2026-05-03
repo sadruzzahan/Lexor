@@ -1,0 +1,2 @@
+ALTER TABLE "map_markers" ADD COLUMN "case_fingerprint" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "map_markers_entity_fingerprint_uq" ON "map_markers" USING btree ("entity_id","case_fingerprint");

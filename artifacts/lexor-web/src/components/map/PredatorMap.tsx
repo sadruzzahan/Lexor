@@ -48,30 +48,60 @@ export function PredatorMap({ markers, onCellClick }: Props) {
     [markers],
   );
 
+  // Cluster source aggregates nearby cells at low zoom so dense regions
+  // don't drown each other out. Each cluster is clickable to zoom in.
+  const clusterGeojson = useMemo(
+    () => ({
+      type: "FeatureCollection" as const,
+      // Re-emit one feature per *case* (count > 1 produces multiple
+      // points stacked at the cell center) so the cluster aggregator
+      // weights by case volume, not cell count.
+      features: markers.flatMap((m) =>
+        Array.from({ length: Math.min(m.count, 100) }, () => ({
+          type: "Feature" as const,
+          properties: { id: m.id, vertical: m.caseVertical },
+          geometry: {
+            type: "Point" as const,
+            coordinates: [m.coarseLng, m.coarseLat],
+          },
+        })),
+      ),
+    }),
+    [markers],
+  );
+
   const mapRef = useRef<MapRef | null>(null);
 
   const handleClick = (e: MapLayerMouseEvent) => {
     const f = e.features?.[0];
     if (!f) return;
-    const eid = (f.properties?.entityId ?? null) as string | null;
-    // Zoom toward the clicked cell so dense regions can be inspected
-    // without server-side re-clustering (markers are already aggregated
-    // server-side per cell, so we don't need a cluster source).
     const map = mapRef.current?.getMap();
-    if (map) {
-      const geom = f.geometry as unknown as {
-        type: string;
-        coordinates: [number, number];
-      };
-      if (geom.type !== "Point") return;
-      const [lng, lat] = geom.coordinates;
+    const geom = f.geometry as unknown as {
+      type: string;
+      coordinates: [number, number];
+    };
+    if (geom.type !== "Point" || !map) return;
+    const [lng, lat] = geom.coordinates;
+
+    // Cluster click — zoom into the cluster.
+    if (f.properties?.cluster) {
       const current = map.getZoom();
       map.easeTo({
         center: [lng, lat],
-        zoom: Math.min(7.5, Math.max(current + 1.5, 5)),
+        zoom: Math.min(8, current + 2),
         duration: 600,
       });
+      return;
     }
+
+    // Single-cell click — zoom in AND open side sheet for the entity.
+    const current = map.getZoom();
+    map.easeTo({
+      center: [lng, lat],
+      zoom: Math.min(7.5, Math.max(current + 1.5, 5)),
+      duration: 600,
+    });
+    const eid = (f.properties?.entityId ?? null) as string | null;
     onCellClick?.(eid);
   };
 
@@ -84,7 +114,7 @@ export function PredatorMap({ markers, onCellClick }: Props) {
       minZoom={2.5}
       attributionControl={{ compact: true }}
       style={{ width: "100%", height: "100%" }}
-      interactiveLayerIds={["pin-points"]}
+      interactiveLayerIds={["pin-points", "pin-clusters"]}
       onClick={handleClick}
       onMouseEnter={(e) => {
         const map = mapRef.current?.getMap();
@@ -159,7 +189,7 @@ export function PredatorMap({ markers, onCellClick }: Props) {
         <Layer
           id="pin-points"
           type="circle"
-          minzoom={4}
+          minzoom={4.5}
           paint={{
             "circle-radius": [
               "interpolate",
@@ -179,6 +209,56 @@ export function PredatorMap({ markers, onCellClick }: Props) {
             "circle-stroke-color": "#0b0b14",
             "circle-stroke-width": 1,
           }}
+        />
+      </Source>
+      <Source
+        id="pin-clusters"
+        type="geojson"
+        data={clusterGeojson}
+        cluster={true}
+        clusterRadius={48}
+        clusterMaxZoom={5}
+      >
+        <Layer
+          id="pin-clusters"
+          type="circle"
+          filter={["has", "point_count"]}
+          maxzoom={5}
+          paint={{
+            "circle-color": [
+              "step",
+              ["get", "point_count"],
+              "#9b87ff",
+              10,
+              "#ffba49",
+              50,
+              "#ff5470",
+            ],
+            "circle-opacity": 0.85,
+            "circle-stroke-color": "#0b0b14",
+            "circle-stroke-width": 1.5,
+            "circle-radius": [
+              "step",
+              ["get", "point_count"],
+              14,
+              10,
+              20,
+              50,
+              28,
+            ],
+          }}
+        />
+        <Layer
+          id="pin-cluster-count"
+          type="symbol"
+          filter={["has", "point_count"]}
+          maxzoom={5}
+          layout={{
+            "text-field": ["get", "point_count_abbreviated"],
+            "text-size": 12,
+            "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+          }}
+          paint={{ "text-color": "#0b0b14" }}
         />
       </Source>
     </Map>

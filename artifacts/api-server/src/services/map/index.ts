@@ -13,7 +13,7 @@
 
 import { createHash } from "node:crypto";
 import { db, mapMarkersTable, entitiesTable, casesTable } from "@workspace/db";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql, type SQL } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { CELL_DEG, placeCase, snapToCell } from "./geo";
 import type { Vertical } from "../classify";
@@ -56,14 +56,20 @@ export async function recordMarkerForCase(
     });
     if (!placed) return null;
 
+    // Per spec: round to 0.01° at write time so even raw rows in the
+    // database are coarsened beyond a single building / address. This is
+    // belt-and-braces on top of the read-time cell suppression.
+    const coarseLat = (Math.round(placed.lat * 100) / 100).toFixed(2);
+    const coarseLng = (Math.round(placed.lng * 100) / 100).toFixed(2);
+
     const inserted = await db
       .insert(mapMarkersTable)
       .values({
         entityId: opts.entityId,
         caseVertical: opts.vertical,
         violationCodes: opts.violationCodes,
-        coarseLat: placed.lat.toFixed(4),
-        coarseLng: placed.lng.toFixed(4),
+        coarseLat,
+        coarseLng,
         zipCode: opts.jurisdiction,
         caseFingerprint: caseFingerprint(opts.caseId),
       })
@@ -110,7 +116,7 @@ interface QueryOpts {
  * what the case-page Map tab uses.
  */
 export async function queryMarkers(opts: QueryOpts): Promise<MarkerCell[]> {
-  const wheres = [] as ReturnType<typeof eq>[];
+  const wheres: SQL[] = [];
   if (opts.vertical) {
     wheres.push(eq(mapMarkersTable.caseVertical, opts.vertical));
   }
@@ -119,7 +125,7 @@ export async function queryMarkers(opts: QueryOpts): Promise<MarkerCell[]> {
   }
   if (opts.violationCode) {
     wheres.push(
-      sql`${opts.violationCode} = ANY(${mapMarkersTable.violationCodes})` as unknown as ReturnType<typeof eq>,
+      sql`${opts.violationCode} = ANY(${mapMarkersTable.violationCodes})`,
     );
   }
   if (opts.sinceDays && opts.sinceDays > 0) {
@@ -129,10 +135,10 @@ export async function queryMarkers(opts: QueryOpts): Promise<MarkerCell[]> {
   if (opts.bbox) {
     const [minLng, minLat, maxLng, maxLat] = opts.bbox;
     wheres.push(
-      sql`${mapMarkersTable.coarseLng}::float8 BETWEEN ${minLng} AND ${maxLng}` as unknown as ReturnType<typeof eq>,
+      sql`${mapMarkersTable.coarseLng}::float8 BETWEEN ${minLng} AND ${maxLng}`,
     );
     wheres.push(
-      sql`${mapMarkersTable.coarseLat}::float8 BETWEEN ${minLat} AND ${maxLat}` as unknown as ReturnType<typeof eq>,
+      sql`${mapMarkersTable.coarseLat}::float8 BETWEEN ${minLat} AND ${maxLat}`,
     );
   }
 

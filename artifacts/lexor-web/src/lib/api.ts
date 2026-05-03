@@ -237,12 +237,14 @@ export interface MapEntityRollup {
 export async function getMapMarkers(opts: {
   vertical?: string | null;
   sinceDays?: number | null;
+  violation?: string | null;
   bbox?: [number, number, number, number] | null;
   entityId?: string | null;
 } = {}): Promise<MapMarkerCell[]> {
   const qs = new URLSearchParams();
   if (opts.vertical) qs.set("vertical", opts.vertical);
   if (opts.sinceDays) qs.set("sinceDays", String(opts.sinceDays));
+  if (opts.violation) qs.set("violation", opts.violation);
   if (opts.bbox) qs.set("bbox", opts.bbox.join(","));
   if (opts.entityId) qs.set("entityId", opts.entityId);
   const r = await fetch(`${API}/map/markers?${qs}`);
