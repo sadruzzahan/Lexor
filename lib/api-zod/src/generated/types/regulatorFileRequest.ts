@@ -7,9 +7,14 @@
  */
 import type { RegulatorAgency } from "./regulatorAgency";
 
+/**
+ * The pipeline pre-drafts complaints for every detected violation,
+so the client only needs to identify the case + agency. The
+server returns the previously drafted complaint object so the UI
+can preview, copy, or download it.
+
+ */
 export interface RegulatorFileRequest {
   caseId: string;
   agency: RegulatorAgency;
-  /** @minLength 1 */
-  draftHtml: string;
 }

@@ -104,6 +104,7 @@ export const RegulatorAgency = {
   CFPB: "CFPB",
   FTC: "FTC",
   EEOC: "EEOC",
+  DOL_WHD: "DOL_WHD",
   STATE_AG: "STATE_AG",
 } as const;
 
@@ -266,24 +267,58 @@ export type LawyerBid = LawyerBidRequest & {
   createdAt: string;
 };
 
+/**
+ * The pipeline pre-drafts complaints for every detected violation,
+so the client only needs to identify the case + agency. The
+server returns the previously drafted complaint object so the UI
+can preview, copy, or download it.
+
+ */
 export interface RegulatorFileRequest {
   caseId: string;
   agency: RegulatorAgency;
-  /** @minLength 1 */
-  draftHtml: string;
 }
+
+export type RegulatorFileResponseTier =
+  | (typeof RegulatorFileResponseTier)[keyof typeof RegulatorFileResponseTier]
+  | null;
+
+export const RegulatorFileResponseTier = {
+  NUMBER_1: 1,
+  NUMBER_2: 2,
+} as const;
+
+export type RegulatorFileResponseFilingMode =
+  | (typeof RegulatorFileResponseFilingMode)[keyof typeof RegulatorFileResponseFilingMode]
+  | null;
+
+export const RegulatorFileResponseFilingMode = {
+  "guided-portal": "guided-portal",
+  "pdf-and-deeplink": "pdf-and-deeplink",
+} as const;
 
 export type RegulatorFileResponseStatus =
   (typeof RegulatorFileResponseStatus)[keyof typeof RegulatorFileResponseStatus];
 
 export const RegulatorFileResponseStatus = {
+  draft: "draft",
   submitted: "submitted",
   prepared: "prepared",
 } as const;
 
 export interface RegulatorFileResponse {
+  agency: RegulatorAgency;
+  agencyLabel: string;
+  filingUrl: string;
+  tier?: RegulatorFileResponseTier;
+  filingMode?: RegulatorFileResponseFilingMode;
+  /** @minLength 1 */
+  draftHtml: string;
+  /** @minLength 1 */
+  draftPlainText: string;
+  steps: string[];
   status: RegulatorFileResponseStatus;
-  filingUrl?: string | null;
+  strippedCitations?: string[];
   downloadUrl?: string | null;
 }
 

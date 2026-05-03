@@ -10,6 +10,7 @@ export type RegulatorFileResponseStatus =
   (typeof RegulatorFileResponseStatus)[keyof typeof RegulatorFileResponseStatus];
 
 export const RegulatorFileResponseStatus = {
+  draft: "draft",
   submitted: "submitted",
   prepared: "prepared",
 } as const;

@@ -14,5 +14,6 @@ export const RegulatorAgency = {
   CFPB: "CFPB",
   FTC: "FTC",
   EEOC: "EEOC",
+  DOL_WHD: "DOL_WHD",
   STATE_AG: "STATE_AG",
 } as const;

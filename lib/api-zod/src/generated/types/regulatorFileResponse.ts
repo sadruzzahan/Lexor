@@ -5,10 +5,23 @@
  * Lexor / zexorex API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { RegulatorAgency } from "./regulatorAgency";
+import type { RegulatorFileResponseFilingMode } from "./regulatorFileResponseFilingMode";
 import type { RegulatorFileResponseStatus } from "./regulatorFileResponseStatus";
+import type { RegulatorFileResponseTier } from "./regulatorFileResponseTier";
 
 export interface RegulatorFileResponse {
+  agency: RegulatorAgency;
+  agencyLabel: string;
+  filingUrl: string;
+  tier?: RegulatorFileResponseTier;
+  filingMode?: RegulatorFileResponseFilingMode;
+  /** @minLength 1 */
+  draftHtml: string;
+  /** @minLength 1 */
+  draftPlainText: string;
+  steps: string[];
   status: RegulatorFileResponseStatus;
-  filingUrl?: string | null;
+  strippedCitations?: string[];
   downloadUrl?: string | null;
 }

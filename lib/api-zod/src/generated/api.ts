@@ -394,16 +394,26 @@ export const SubmitLawyerBidResponse = zod
 /**
  * @summary Submit a complaint draft to an agency
  */
-
-export const FileRegulatorComplaintBody = zod.object({
-  caseId: zod.string().uuid(),
-  agency: zod.enum(["HUD", "CFPB", "FTC", "EEOC", "STATE_AG"]),
-  draftHtml: zod.string().min(1),
-});
+export const FileRegulatorComplaintBody = zod
+  .object({
+    caseId: zod.string().uuid(),
+    agency: zod.enum(["HUD", "CFPB", "FTC", "EEOC", "DOL_WHD", "STATE_AG"]),
+  })
+  .describe(
+    "The pipeline pre-drafts complaints for every detected violation,\nso the client only needs to identify the case + agency. The\nserver returns the previously drafted complaint object so the UI\ncan preview, copy, or download it.\n",
+  );
 
 export const FileRegulatorComplaintResponse = zod.object({
-  status: zod.enum(["submitted", "prepared"]),
-  filingUrl: zod.string().nullish(),
+  agency: zod.enum(["HUD", "CFPB", "FTC", "EEOC", "DOL_WHD", "STATE_AG"]),
+  agencyLabel: zod.string(),
+  filingUrl: zod.string().url(),
+  tier: zod.union([zod.literal(1), zod.literal(2)]).nullish(),
+  filingMode: zod.enum(["guided-portal", "pdf-and-deeplink"]).nullish(),
+  draftHtml: zod.string().min(1),
+  draftPlainText: zod.string().min(1),
+  steps: zod.array(zod.string()),
+  status: zod.enum(["draft", "submitted", "prepared"]),
+  strippedCitations: zod.array(zod.string()).optional(),
   downloadUrl: zod.string().nullish(),
 });
 

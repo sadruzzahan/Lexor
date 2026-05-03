@@ -66,8 +66,17 @@ export function classify(extraction: Extraction): Vertical {
   return winner && winner[1] >= 2 ? winner[0] : "other";
 }
 
-const STATE_REGEX =
-  /\b(?:Alabama|AL|Alaska|AK|Arizona|AZ|Arkansas|AR|California|CA|Colorado|CO|Connecticut|CT|Delaware|DE|Florida|FL|Georgia|GA|Hawaii|HI|Idaho|ID|Illinois|IL|Indiana|IN|Iowa|IA|Kansas|KS|Kentucky|KY|Louisiana|LA|Maine|ME|Maryland|MD|Massachusetts|MA|Michigan|MI|Minnesota|MN|Mississippi|MS|Missouri|MO|Montana|MT|Nebraska|NE|Nevada|NV|New Hampshire|NH|New Jersey|NJ|New Mexico|NM|New York|NY|North Carolina|NC|North Dakota|ND|Ohio|OH|Oklahoma|OK|Oregon|OR|Pennsylvania|PA|Rhode Island|RI|South Carolina|SC|South Dakota|SD|Tennessee|TN|Texas|TX|Utah|UT|Vermont|VT|Virginia|VA|Washington|WA|West Virginia|WV|Wisconsin|WI|Wyoming|WY)\b/i;
+// Full state names — safe to match anywhere (case-insensitive, word-bounded).
+const STATE_NAME_REGEX =
+  /\b(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming)\b/i;
+
+// 2-letter state codes are ambiguous in prose ("IN", "OR", "ME", "OH").
+// Only trust them when they appear in an address-shaped context — i.e.
+// preceded by a comma + space and followed by a US ZIP (5 digits, optional +4).
+// Examples that match: "Los Angeles, CA 90013", "Brooklyn, NY 11201-1234".
+// Examples that do NOT match: "in this case", "or perhaps", "Maine doctrine".
+const STATE_ADDR_REGEX =
+  /,\s*([A-Z]{2})\s+\d{5}(?:-\d{4})?\b/;
 
 const STATE_TO_ISO: Record<string, string> = {
   alabama: "US-AL", al: "US-AL",
@@ -126,11 +135,26 @@ export function inferJurisdiction(extraction: Extraction): string | null {
   const candidates = [
     extraction.sender.address,
     extraction.recipient.address,
-    extraction.rawText.slice(0, 800),
+    extraction.rawText.slice(0, 1500),
   ].filter((c): c is string => Boolean(c));
+
+  // Pass 1: address-shaped 2-letter code (",  CA 90210").
   for (const c of candidates) {
-    const m = c.match(STATE_REGEX);
-    if (m) return STATE_TO_ISO[m[0].toLowerCase()] ?? null;
+    const m = c.match(STATE_ADDR_REGEX);
+    if (m && m[1]) {
+      const iso = STATE_TO_ISO[m[1].toLowerCase()];
+      if (iso) return iso;
+    }
   }
+
+  // Pass 2: full state name anywhere (unambiguous — "California", "New York").
+  for (const c of candidates) {
+    const m = c.match(STATE_NAME_REGEX);
+    if (m) {
+      const iso = STATE_TO_ISO[m[0].toLowerCase()];
+      if (iso) return iso;
+    }
+  }
+
   return null;
 }

@@ -478,7 +478,7 @@ components:
       enum: [voice, whatsapp]
     RegulatorAgency:
       type: string
-      enum: [HUD, CFPB, FTC, EEOC, STATE_AG]
+      enum: [HUD, CFPB, FTC, EEOC, DOL_WHD, STATE_AG]
 
     CreateCaseRequest:
       type: object
@@ -671,15 +671,34 @@ components:
 
     RegulatorFileRequest:
       type: object
-      required: [caseId, agency, draftHtml]
+      required: [caseId, agency]
+      description: |
+        The pipeline pre-drafts complaints for every detected violation,
+        so the client only needs to identify the case + agency. The
+        server returns the previously drafted complaint object so the UI
+        can preview, copy, or download it.
       properties:
         caseId: { type: string, format: uuid }
         agency: { $ref: "#/components/schemas/RegulatorAgency" }
-        draftHtml: { type: string, minLength: 1 }
     RegulatorFileResponse:
       type: object
-      required: [status]
+      required: [agency, agencyLabel, filingUrl, draftHtml, draftPlainText, steps, status]
       properties:
-        status: { type: string, enum: [submitted, prepared] }
-        filingUrl: { type: string, nullable: true }
+        agency: { $ref: "#/components/schemas/RegulatorAgency" }
+        agencyLabel: { type: string }
+        filingUrl: { type: string, format: uri }
+        tier: { type: integer, enum: [1, 2], nullable: true }
+        filingMode:
+          type: string
+          enum: [guided-portal, pdf-and-deeplink]
+          nullable: true
+        draftHtml: { type: string, minLength: 1 }
+        draftPlainText: { type: string, minLength: 1 }
+        steps:
+          type: array
+          items: { type: string }
+        status: { type: string, enum: [draft, submitted, prepared] }
+        strippedCitations:
+          type: array
+          items: { type: string }
         downloadUrl: { type: string, nullable: true }
