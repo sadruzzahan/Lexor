@@ -11,8 +11,6 @@ import type { MapMarkerCell } from "@/lib/api";
 
 interface Props {
   markers: MapMarkerCell[];
-  /** When set, the map is constrained to this entity's footprint (case page). */
-  focusEntityId?: string | null;
   onCellClick?: (entityId: string | null) => void;
 }
 

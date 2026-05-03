@@ -45,6 +45,16 @@ function caseFingerprint(caseId: string): string {
  * Idempotency is DB-enforced via the unique index on
  * (entity_id, case_fingerprint). On conflict we no-op and skip the
  * pinCount bump, so retries cannot corrupt the leaderboard.
+ *
+ * Privacy contract:
+ *   - Coordinates are written at 0.01° precision (≈1 km), never finer.
+ *   - The case identity is one-way hashed into `case_fingerprint`; the
+ *     row contains nothing that links back to a user.
+ *   - Suppression of low-density areas (<3 cases per cell) is enforced
+ *     at READ time in `queryMarkers`, not at write time. We deliberately
+ *     accept this trade-off because pre-write suppression would create
+ *     a chicken-and-egg problem (no first marker can ever be inserted
+ *     in a fresh region) and would silently drop legitimate signal.
  */
 export async function recordMarkerForCase(
   opts: RecordOpts,
