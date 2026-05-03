@@ -44,11 +44,25 @@ Property Manager
 `,
 };
 
+// Parse `#alert=<uuid>` from the current URL. Used by the voice tool
+// open_case_on_device which texts the caller a deeplink like
+// /lexor/settings#alert=<uuid> so they can review the drafted reply on
+// their phone. If present, we scroll the alert into view and open its
+// "Drafted reply" details panel.
+function readAlertHash(): string | null {
+  if (typeof window === "undefined") return null;
+  const m = /(?:^|[#&])alert=([0-9a-f-]{36})/i.exec(window.location.hash);
+  return m?.[1] ?? null;
+}
+
 export default function SettingsPage() {
   useDocumentTitle(`Inbox Sentinel · Settings · ${BRAND.name}`);
   const [status, setStatus] = useState<InboxStatus | null>(null);
   const [statusErr, setStatusErr] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<InboxAlert[]>([]);
+  const [highlightAlertId, setHighlightAlertId] = useState<string | null>(
+    () => readAlertHash(),
+  );
   const [phone, setPhone] = useState("");
   const [savingPhone, setSavingPhone] = useState(false);
   const [testRunning, setTestRunning] = useState(false);
@@ -193,6 +207,8 @@ export default function SettingsPage() {
         onDismiss={handleDismiss}
         onSend={handleSend}
         canSend={status.connectorReady}
+        highlightAlertId={highlightAlertId}
+        onHighlightConsumed={() => setHighlightAlertId(null)}
       />
 
       <DisclaimerStrip />
@@ -404,8 +420,31 @@ function AlertsList(props: {
   onDismiss: (id: string) => void;
   onSend: (id: string) => void;
   canSend: boolean;
+  highlightAlertId: string | null;
+  onHighlightConsumed: () => void;
 }) {
-  const { alerts, onDismiss, onSend, canSend } = props;
+  const { alerts, onDismiss, onSend, canSend, highlightAlertId, onHighlightConsumed } = props;
+  // When the page lands with #alert=<id> in the URL, scroll that alert
+  // into view, briefly highlight it, and clear the hash so a refresh
+  // doesn't re-trigger.
+  useEffect(() => {
+    if (!highlightAlertId) return;
+    const target = alerts.find((a) => a.id === highlightAlertId);
+    if (!target) return;
+    const el = document.querySelector(`[data-testid="alert-${highlightAlertId}"]`);
+    if (el && "scrollIntoView" in el) {
+      (el as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+      const details = el.querySelector("details");
+      if (details) details.setAttribute("open", "true");
+    }
+    const t = setTimeout(() => {
+      onHighlightConsumed();
+      if (window.location.hash) {
+        history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [highlightAlertId, alerts, onHighlightConsumed]);
   if (alerts.length === 0) return null;
   return (
     <div className="rounded-2xl border border-border bg-bg-elevated p-6 sm:p-8 mb-6">
@@ -421,7 +460,11 @@ function AlertsList(props: {
               initial={{ opacity: 0, x: 8 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0 }}
-              className="rounded-lg border border-border bg-bg p-4"
+              className={`rounded-lg border bg-bg p-4 transition-colors ${
+                highlightAlertId === a.id
+                  ? "border-accent shadow-[0_0_0_2px_rgb(var(--accent)/0.35)]"
+                  : "border-border"
+              }`}
               data-testid={`alert-${a.id}`}
             >
               <div className="flex items-start justify-between gap-3 mb-2">

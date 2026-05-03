@@ -27,13 +27,23 @@ router.post(
     // before the caller speaks. Model still switches if the caller talks
     // in a different language.
     const lang = guessLangFromE164(from);
+    // Inbox Sentinel preload: when the dispatcher places the outbound
+    // call it appends `?alertId=<uuid>` to this webhook URL. We pass it
+    // through as a stream <Parameter> so the realtime bridge can fetch
+    // the alert + preload its gist/deadline/draft into the session.
+    const alertIdRaw =
+      typeof req.query.alertId === "string" ? req.query.alertId : "";
+    const alertId = /^[0-9a-f-]{36}$/i.test(alertIdRaw) ? alertIdRaw : "";
     const wsUrl = `wss://${host}/api/counsel/voice/stream`;
+    const alertParam = alertId
+      ? `\n      <Parameter name="alertId" value="${escapeXml(alertId)}"/>`
+      : "";
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${wsUrl}">
       <Parameter name="from" value="${escapeXml(from)}"/>
-      <Parameter name="lang" value="${escapeXml(lang)}"/>
+      <Parameter name="lang" value="${escapeXml(lang)}"/>${alertParam}
     </Stream>
   </Connect>
 </Response>`;

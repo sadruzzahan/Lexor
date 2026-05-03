@@ -43,6 +43,12 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
   let callerPhone: string | null = null;
   let callerLang = "en";
   let realtimeReady = false;
+  /** Inbox Sentinel preload — set when this call was triggered by an
+   *  inbox alert via dispatchAlert(). The realtime bridge injects the
+   *  alert gist/deadline/draft into the session as a system message
+   *  and exposes the alertId to the send_email_reply / open_case_on_device
+   *  voice tools so the model never has to guess it. */
+  let preloadedAlertId: string | null = null;
   /** Tracks the active assistant audio response so we can cancel for barge-in. */
   let activeResponseId: string | null = null;
 
@@ -273,7 +279,18 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
           break;
         }
         case "send_email_reply": {
-          const alertId = String(args.alertId ?? "");
+          // Always prefer the server-side preloaded alertId — the model
+          // doesn't need to know it, and we refuse to send for any other
+          // alert id even if the model hallucinates one.
+          const alertId = preloadedAlertId ?? String(args.alertId ?? "");
+          if (
+            preloadedAlertId &&
+            args.alertId &&
+            args.alertId !== preloadedAlertId
+          ) {
+            output = { ok: false, error: "alert_id_mismatch_with_session" };
+            break;
+          }
           const confirmed = args.confirmedBySpeech === true;
           if (!alertId) {
             output = { error: "alertId required" };
@@ -301,7 +318,7 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
           break;
         }
         case "open_case_on_device": {
-          const alertId = String(args.alertId ?? "");
+          const alertId = preloadedAlertId ?? String(args.alertId ?? "");
           if (!alertId || !callerPhone) {
             output = { ok: false, error: "alertId and caller phone required" };
             break;
@@ -354,12 +371,25 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
           | {
               streamSid?: string;
               callSid?: string;
-              customParameters?: { from?: string; lang?: string };
+              customParameters?: {
+                from?: string;
+                lang?: string;
+                alertId?: string;
+              };
             }
           | undefined;
         streamSid = start?.streamSid ?? null;
         callerPhone = start?.customParameters?.from ?? null;
         callerLang = start?.customParameters?.lang ?? "en";
+        const alertIdParam = start?.customParameters?.alertId ?? "";
+        if (/^[0-9a-f-]{36}$/i.test(alertIdParam)) {
+          preloadedAlertId = alertIdParam;
+          // Fire-and-forget — push the alert context as a system message
+          // so the model can read the gist/deadline aloud and call the
+          // inbox tools with the right alertId. Errors here must NOT
+          // tear down the call; we just continue without preload.
+          void preloadInboxAlertContextImpl(sendUpstream, alertIdParam);
+        }
         const externalId = start?.callSid ?? streamSid ?? `unknown-${Date.now()}`;
         if (callerPhone) {
           try {
@@ -498,6 +528,64 @@ const TOOL_DEFINITIONS = [
 ];
 
 // ---- Helpers ----
+/**
+ * Preload an Inbox Sentinel alert into the active realtime session.
+ * Called from the Twilio "start" event when the alertId stream parameter
+ * is present. Pushes the alert gist/deadline/draft as a system message
+ * so the model can read them aloud and call send_email_reply /
+ * open_case_on_device with the right alertId.
+ *
+ * Defensive: every failure mode degrades silently so a bad preload can
+ * never tear down an active phone call.
+ */
+async function preloadInboxAlertContextImpl(
+  realtimeSend: (payload: object) => void,
+  alertId: string,
+): Promise<void> {
+  try {
+    const { db: d, inboxAlertsTable } = await import("@workspace/db");
+    const [alert] = await d
+      .select()
+      .from(inboxAlertsTable)
+      .where(eq(inboxAlertsTable.id, alertId))
+      .limit(1);
+    if (!alert) {
+      logger.warn({ alertId }, "preload alert: not found");
+      return;
+    }
+    const lines = [
+      `INBOX SENTINEL CONTEXT — this call was triggered by an inbox alert.`,
+      `Read the gist + deadline aloud, then ask the caller "Do you want me to send the drafted reply, or review it on your phone first?"`,
+      ``,
+      `Alert id: ${alert.id} (preloaded into the session — DO NOT ask the user for it).`,
+      `Sender: ${alert.senderDisplay}`,
+      `Subject: ${alert.subject}`,
+      `Category: ${alert.category}`,
+      alert.deadlineIso ? `Deadline: ${alert.deadlineIso}` : "Deadline: none detected",
+      ``,
+      `Plain-language gist (read aloud):`,
+      alert.gist,
+      ``,
+      `Drafted reply (DO NOT read aloud unless the caller asks for "review"):`,
+      alert.draftedReply ?? "(no draft)",
+      ``,
+      `Tools available for this call:`,
+      `- send_email_reply: requires confirmedBySpeech=true after caller clearly says "send it" (or equivalent in their language).`,
+      `- open_case_on_device: texts the caller a deeplink to the alert page.`,
+    ].join("\n");
+    realtimeSend({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "system",
+        content: [{ type: "input_text", text: lines }],
+      },
+    });
+  } catch (err) {
+    logger.warn({ err, alertId }, "preload inbox alert context failed");
+  }
+}
+
 async function loadResponseLetter(
   caseId: string,
 ): Promise<{ plainText: string } | null> {
