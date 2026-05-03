@@ -18,7 +18,7 @@ environment. Anything marked *(optional)* can be added later — the app degrade
 | `ELEVENLABS_API_KEY` | Hearing-coach text-to-speech |
 | `TWILIO_ACCOUNT_SID` | Inbound voice + WhatsApp bridge |
 | `TWILIO_AUTH_TOKEN` | Inbound voice + WhatsApp bridge |
-| `TWILIO_PHONE_NUMBER` | Voice page CTA + outbound SMS uploads |
+| `TWILIO_PHONE_NUMBER` | Voice page CTA + outbound SMS uploads (build plan §12.1 calls this `TWILIO_VOICE_NUMBER` — same value, code uses `TWILIO_PHONE_NUMBER`) |
 | `TWILIO_WHATSAPP_NUMBER` | WhatsApp QR + replies |
 | `COURTLISTENER_TOKEN` | Federal + state case-law lookup |
 | `API_DATA_GOV_KEY` | regulations.gov lookups |
@@ -63,6 +63,11 @@ In the Twilio console, point each number at the deployed API:
 
 - **Voice number → A call comes in →** Webhook
   `https://<your-domain>/api/counsel/voice/incoming` (HTTP POST)
+
+  > The Twilio Media Streams WebSocket URL is derived from this host
+  > automatically — Twilio opens `wss://<your-domain>/api/counsel/voice/stream`
+  > based on the TwiML that `/voice/incoming` returns. You only need to
+  > configure the `/voice/incoming` URL in the Twilio console.
 - **WhatsApp number → When a message comes in →** Webhook
   `https://<your-domain>/api/counsel/whatsapp/inbound` (HTTP POST)
 
