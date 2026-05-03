@@ -288,6 +288,16 @@ router.post(
       )
       .limit(1);
     if (!alert) throw new HttpError(404, "not_found", "Alert not found.");
+    // State guard — match the voice helper. Refuse to send for an alert
+    // that has already been sent/dismissed/resolved so a replayed HTTP
+    // call can't double-send.
+    if (alert.status !== "fired" && alert.status !== "dispatched") {
+      throw new HttpError(
+        409,
+        `wrong_state:${alert.status}`,
+        `Alert is in state "${alert.status}" — cannot send.`,
+      );
+    }
     if (!alert.gmailThreadId || !alert.gmailMessageId) {
       throw new HttpError(
         409,
