@@ -12,6 +12,7 @@ import {
   Trophy,
   Check,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import {
   getCoalition,
@@ -22,6 +23,14 @@ import {
   type CoalitionBid,
 } from "@/lib/api";
 import { useDocumentTitle } from "@/lib/hooks";
+
+const VERTICAL_LABELS: Record<string, string> = {
+  debt: "Debt Collection",
+  eviction: "Eviction Notice",
+  wage: "Wage Dispute",
+  contract: "Contract Dispute",
+  other: "Legal letter",
+};
 
 const COALITION_DISCLAIMER = `Joining a coalition does not commit you to a lawsuit. A vetted plaintiff's lawyer may contact you. Lexor is not your lawyer and takes 0% of any recovery. You can leave at any time.`;
 
@@ -35,6 +44,7 @@ export default function CoalitionPage() {
   const [error, setError] = useState<string | null>(null);
   const [showJoin, setShowJoin] = useState(false);
   const [showBid, setShowBid] = useState(false);
+  const [voteBidId, setVoteBidId] = useState<string | null>(null);
 
   async function reload() {
     if (!id) return;
@@ -102,7 +112,7 @@ export default function CoalitionPage() {
           <span className="rounded-full border border-border-strong px-2 py-0.5 text-[11px] uppercase tracking-wider">
             {data.status}
           </span>
-          <span>{data.vertical}</span>
+          <span>{VERTICAL_LABELS[data.vertical] ?? data.vertical}</span>
           {data.jurisdiction && <span>· {data.jurisdiction}</span>}
         </div>
       </header>
@@ -154,21 +164,7 @@ export default function CoalitionPage() {
                     key={b.id}
                     bid={b}
                     isWinner={winningBid?.id === b.id}
-                    onVote={async () => {
-                      const caseId = window.prompt(
-                        "Enter your case id (the UUID from /c/<id>) to cast your vote:",
-                      );
-                      if (!caseId) return;
-                      try {
-                        await voteCoalitionBid(id, caseId.trim(), b.id);
-                        toast.success("Vote recorded");
-                        await reload();
-                      } catch (e) {
-                        toast.error(
-                          e instanceof Error ? e.message : "Vote failed",
-                        );
-                      }
-                    }}
+                    onVote={() => setVoteBidId(b.id)}
                   />
                 ))}
               </ul>
@@ -229,6 +225,17 @@ export default function CoalitionPage() {
           onClose={() => setShowBid(false)}
           onSubmitted={async () => {
             setShowBid(false);
+            await reload();
+          }}
+        />
+      )}
+      {voteBidId && (
+        <VoteDialog
+          coalitionId={id}
+          bidId={voteBidId}
+          onClose={() => setVoteBidId(null)}
+          onVoted={async () => {
+            setVoteBidId(null);
             await reload();
           }}
         />
@@ -376,6 +383,75 @@ function JoinDialog({
             className="shimmer-btn rounded-base px-4 py-2 text-sm font-medium disabled:opacity-50"
           >
             {busy ? "Joining…" : "Confirm opt-in"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VoteDialog({
+  coalitionId,
+  bidId,
+  onClose,
+  onVoted,
+}: {
+  coalitionId: string;
+  bidId: string;
+  onClose: () => void;
+  onVoted: () => void;
+}) {
+  const [caseId, setCaseId] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-[min(480px,92vw)] rounded-lg2 border border-border-strong bg-bg-elevated p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-display text-2xl">Cast your vote</h3>
+        <p className="mt-2 text-xs text-fg-muted">
+          Enter your case ID to confirm you are an opted-in coalition member.
+          Your case ID appears in the URL when viewing your case
+          (e.g. <code className="font-mono">/c/&lt;uuid&gt;</code>).
+        </p>
+        <label className="mt-4 block text-sm">
+          Your case ID
+          <input
+            value={caseId}
+            onChange={(e) => setCaseId(e.target.value)}
+            placeholder="paste the UUID from your case URL"
+            className="mt-1 w-full rounded-base border border-border-strong bg-bg p-2 text-sm font-mono"
+          />
+        </label>
+        <div className="mt-6 flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="rounded-base border border-border-strong px-3 py-2 text-sm text-fg-muted"
+          >
+            Cancel
+          </button>
+          <button
+            disabled={caseId.trim().length < 10 || busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                await voteCoalitionBid(coalitionId, caseId.trim(), bidId);
+                toast.success("Vote recorded");
+                onVoted();
+              } catch (e) {
+                toast.error(e instanceof Error ? e.message : "Vote failed");
+              } finally {
+                setBusy(false);
+              }
+            }}
+            className="shimmer-btn rounded-base px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {busy ? "Voting…" : "Confirm vote"}
           </button>
         </div>
       </div>

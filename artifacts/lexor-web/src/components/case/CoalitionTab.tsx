@@ -74,7 +74,7 @@ export function CoalitionTab({ row }: { row: CaseRow }) {
         href={`/coalition/${data.id}`}
         className="mt-4 inline-flex items-center gap-2 shimmer-btn rounded-base px-4 py-2 text-sm font-medium"
       >
-        {data.hasOptedIn ? "Open coalition" : "Review &amp; decide"}
+        {data.hasOptedIn ? "Open coalition" : "Review & decide"}
         <ArrowRight className="size-4" />
       </Link>
     </div>

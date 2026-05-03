@@ -26,6 +26,14 @@ const KIND_LABEL: Record<string, string> = {
   unknown: "Opposing party",
 };
 
+const VERTICAL_LABELS: Record<string, string> = {
+  debt: "Debt Collection",
+  eviction: "Eviction Notice",
+  wage: "Wage Dispute",
+  contract: "Contract Dispute",
+  other: "Legal letter",
+};
+
 export function Adversary({ row }: { row: CaseRow }) {
   const [dossier, setDossier] = useState<AdversaryDossier | null>(null);
   const [loading, setLoading] = useState(true);
@@ -294,7 +302,7 @@ export function DossierView({
                 key={`${c.createdAt}-${i}`}
                 className="rounded-base border border-border bg-bg-raised px-3 py-2 text-xs text-fg-muted"
               >
-                <div className="capitalize text-fg">{c.vertical}</div>
+                <div className="text-fg">{VERTICAL_LABELS[c.vertical as keyof typeof VERTICAL_LABELS] ?? c.vertical}</div>
                 <div>
                   {c.jurisdiction ?? "—"}
                   {" · "}
@@ -304,18 +312,10 @@ export function DossierView({
             ))}
           </ul>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Link
-              href={`/coalition/${dossier.entityId}`}
-              className="inline-flex items-center gap-2 rounded-base bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:opacity-90 transition"
-            >
-              <Users2 className="size-4" />
-              Form a coalition
-              <ArrowUpRight className="size-3.5" />
-            </Link>
             <span className="text-xs text-fg-subtle">
               {dossier.otherCasesTotal >= 5
-                ? "Threshold reached — coordinate joint action."
-                : `${5 - dossier.otherCasesTotal} more case${5 - dossier.otherCasesTotal === 1 ? "" : "s"} until automatic activation.`}
+                ? "Threshold reached — a coalition forms automatically once your case is processed."
+                : `${5 - dossier.otherCasesTotal} more case${5 - dossier.otherCasesTotal === 1 ? "" : "s"} needed for automatic coalition activation.`}
             </span>
           </div>
         </section>

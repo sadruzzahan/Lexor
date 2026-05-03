@@ -26,6 +26,14 @@ import { useEventStream } from "@/lib/sse";
 import { eventStreamUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+const VERTICAL_LABELS = {
+  debt: "Debt Collection",
+  eviction: "Eviction Notice",
+  wage: "Wage Dispute",
+  contract: "Contract Dispute",
+  other: "Legal letter",
+} as const;
+
 const TABS = [
   { id: "defense", label: "Defense", Icon: Shield },
   { id: "counter", label: "Counter-attack", Icon: Swords },
@@ -154,7 +162,7 @@ export default function CasePage() {
           Case · {caseId.slice(0, 8)}
         </div>
         <h1 className="font-display text-3xl md:text-4xl tracking-tight mt-1 capitalize">
-          {row.vertical === "other" ? "Legal letter" : row.vertical}
+          {VERTICAL_LABELS[row.vertical as keyof typeof VERTICAL_LABELS] ?? "Legal letter"}
           {row.jurisdiction ? ` · ${row.jurisdiction}` : ""}
         </h1>
         {isPending && (

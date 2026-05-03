@@ -51,10 +51,14 @@ async function loadCoachContext(
   }
 
   const parsed = (theCase.parsed ?? {}) as Record<string, unknown>;
-  const documentSummary =
-    (typeof parsed.summary === "string" && parsed.summary) ||
-    (typeof parsed.plainEnglish === "string" && parsed.plainEnglish) ||
-    "(no summary available)";
+  // ExtractionSchema stores rawText (verbatim) and keyClaims — there is no
+  // `summary` or `plainEnglish` field. Use rawText (capped at 600 chars)
+  // as the document summary so the coach brief is always populated.
+  const rawText =
+    typeof parsed.rawText === "string" ? parsed.rawText.trim() : "";
+  const documentSummary = rawText
+    ? rawText.slice(0, 600) + (rawText.length > 600 ? "…" : "")
+    : "(no summary available)";
   const keyClaims = Array.isArray(parsed.keyClaims)
     ? (parsed.keyClaims as unknown[]).filter(
         (c): c is string => typeof c === "string",

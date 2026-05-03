@@ -11,7 +11,6 @@ import {
   MapPin,
   Globe,
   PhoneCall,
-  Users,
   ShieldAlert,
   Home,
   Upload,
@@ -76,7 +75,6 @@ export function CommandPalette() {
             <Item icon={<Home className="h-4 w-4" />} onSelect={() => go("/")}>{t("nav.home")}</Item>
             <Item icon={<Upload className="h-4 w-4" />} onSelect={() => go("/upload")}>{t("nav.upload")}</Item>
             <Item icon={<MapPin className="h-4 w-4" />} onSelect={() => go("/map")}>{t("nav.map")}</Item>
-            <Item icon={<Users className="h-4 w-4" />} onSelect={() => go("/coalition/all")}>{t("nav.coalitions")}</Item>
             <Item icon={<PhoneCall className="h-4 w-4" />} onSelect={() => go("/voice")}>{t("nav.voice")}</Item>
             <Item icon={<Inbox className="h-4 w-4" />} onSelect={() => go("/settings")}>Inbox Sentinel</Item>
           </Command.Group>
@@ -85,7 +83,7 @@ export function CommandPalette() {
             <Item icon={<FilePlus2 className="h-4 w-4" />} onSelect={() => go("/upload")}>
               {t("cmdk.new")}
             </Item>
-            <Item icon={<Search className="h-4 w-4" />} onSelect={() => go("/entity/search")}>
+            <Item icon={<Search className="h-4 w-4" />} onSelect={() => go("/map")}>
               {t("cmdk.entity")}
             </Item>
             <Item icon={<Globe className="h-4 w-4" />} onSelect={() => { toggleLocale(); setOpen(false); }}>

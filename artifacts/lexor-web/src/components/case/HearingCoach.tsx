@@ -359,7 +359,7 @@ export function HearingCoach({ row }: { row: CaseRow }) {
       // Speak the opening brief so the user gets immediate value.
       speak(brief.brief, "normal");
     }
-  }, [brief?.brief, listening, speak]);
+  }, [brief?.brief, speak]);
 
   const stopListening = useCallback(() => {
     // Flip the ref BEFORE calling stop() so the onend restart guard
