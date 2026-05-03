@@ -199,6 +199,17 @@ paths:
       tags: [counsel]
       operationId: getAdversary
       summary: Full litigation dossier
+      description: |
+        Returns the full anonymized dossier for an adversary entity.
+
+        **Undocumented query parameter (intentional, not in generated client):**
+        `excludeCaseId={uuid}` — when provided, this case id is removed from
+        both the anonymized `otherCases` list and `otherCasesTotal`, so a
+        viewer's own case is not counted as "other people fighting them."
+        Not modeled as a formal parameter because orval generates a colliding
+        `GetAdversaryParams` symbol when an endpoint declares both path and
+        query params; consumers using the typed client should pass it via a
+        custom request option until that codegen path is reworked.
       parameters:
         - in: path
           name: entityId
