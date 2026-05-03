@@ -10,10 +10,15 @@ interface CaseSummary {
   violationCount: number;
 }
 
-function publicCaseUrl(caseId: string): string {
+function publicBase(): string {
   const host = (process.env.REPLIT_DOMAINS ?? "").split(",")[0]?.trim();
-  const base = host ? `https://${host}` : process.env.PUBLIC_BASE_URL ?? "";
-  return `${base}/c/${caseId}`;
+  return host ? `https://${host}` : process.env.PUBLIC_BASE_URL ?? "";
+}
+function publicCaseUrl(caseId: string): string {
+  return `${publicBase()}/c/${caseId}`;
+}
+function publicLetterPdfUrl(caseId: string): string {
+  return `${publicBase()}/api/counsel/whatsapp/cases/${caseId}/letter.pdf`;
 }
 
 /**
@@ -49,14 +54,22 @@ export async function sendCaseSummary(
         : 0,
     };
     const url = publicCaseUrl(caseId);
+    const pdfUrl = publicLetterPdfUrl(caseId);
     const lines = [
       `Lexor — your case is ready.`,
       `Type: ${summary.vertical}${summary.jurisdiction ? ` (${summary.jurisdiction})` : ""}`,
       `${summary.violationCount} legal issue${summary.violationCount === 1 ? "" : "s"} found in their letter.`,
-      `Open your full case (response letter, complaints, predator map): ${url}`,
+      `Your response letter is attached as a PDF.`,
+      `Open your full case (complaints, predator map, edits): ${url}`,
       `Reminder: I'm an AI, not a lawyer. This is information, not legal advice.`,
     ];
-    await sendWhatsApp({ to: toPhone, body: lines.join("\n") });
+    // Attach the response-letter PDF directly — Twilio fetches our public
+    // /letter.pdf endpoint and delivers it inline in the WhatsApp message.
+    await sendWhatsApp({
+      to: toPhone,
+      body: lines.join("\n"),
+      mediaUrl: [pdfUrl],
+    });
   } catch (err) {
     logger.warn({ err, caseId }, "sendCaseSummary failed");
   }

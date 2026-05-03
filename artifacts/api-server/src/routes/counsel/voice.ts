@@ -5,6 +5,7 @@ import {
   completeSmsUpload,
 } from "../../services/voice/sms";
 import { HttpError } from "../../middlewares/errorEnvelope";
+import { verifyTwilioSignature } from "../../middlewares/twilioWebhook";
 
 const router: IRouter = Router();
 
@@ -15,22 +16,44 @@ const router: IRouter = Router();
  * (a) hash it for session storage and (b) use it as the SMS recipient
  * when the agent invokes take_letter_photo.
  */
-router.post("/incoming", (req: Request, res: Response) => {
-  const host = req.get("host") ?? "";
-  const from = typeof req.body?.From === "string" ? req.body.From : "";
-  const wsUrl = `wss://${host}/api/counsel/voice/stream`;
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+router.post(
+  "/incoming",
+  verifyTwilioSignature,
+  (req: Request, res: Response) => {
+    const host = req.get("host") ?? "";
+    const from = typeof req.body?.From === "string" ? req.body.From : "";
+    // Best-effort language hint from caller country code — gives the
+    // realtime bridge a deterministic source for the FIRST disclaimer turn
+    // before the caller speaks. Model still switches if the caller talks
+    // in a different language.
+    const lang = guessLangFromE164(from);
+    const wsUrl = `wss://${host}/api/counsel/voice/stream`;
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${wsUrl}">
       <Parameter name="from" value="${escapeXml(from)}"/>
-      <Parameter name="lang" value="en"/>
+      <Parameter name="lang" value="${escapeXml(lang)}"/>
     </Stream>
   </Connect>
 </Response>`;
-  res.set("Content-Type", "application/xml");
-  res.send(xml);
-});
+    res.set("Content-Type", "application/xml");
+    res.send(xml);
+  },
+);
+
+function guessLangFromE164(phone: string): string {
+  // Country-code → likely language. Crude but deterministic and far better
+  // than always-English. A US Spanish speaker still gets an EN open and
+  // can ask to switch — the system prompt handles that.
+  const p = phone.replace(/\s+/g, "");
+  if (p.startsWith("+34") || p.startsWith("+52") || p.startsWith("+57") || p.startsWith("+54") || p.startsWith("+51") || p.startsWith("+58")) return "es";
+  if (p.startsWith("+33") || p.startsWith("+32") || p.startsWith("+225") || p.startsWith("+221")) return "fr";
+  if (p.startsWith("+91")) return "hi";
+  if (p.startsWith("+880")) return "bn";
+  if (p.startsWith("+20") || p.startsWith("+966") || p.startsWith("+971") || p.startsWith("+212") || p.startsWith("+962")) return "ar";
+  return "en";
+}
 
 /**
  * Descriptor endpoint — the actual WS upgrade is handled at the HTTP server

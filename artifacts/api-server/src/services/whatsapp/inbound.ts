@@ -54,19 +54,61 @@ export function parseInboundPayload(
   };
 }
 
+/**
+ * Fetch a Twilio-hosted media URL with our Basic Auth credentials.
+ *
+ * SECURITY: Twilio's signed webhook payload is the only thing that tells
+ * us where this URL came from. Even though we verify the signature
+ * upstream, we still hard-allowlist the host here — defense in depth so a
+ * future webhook misconfiguration or signature bypass cannot be turned
+ * into "fetch attacker URL with our Twilio credentials" SSRF/exfiltration.
+ */
+const TWILIO_MEDIA_HOST_RE =
+  /^([a-z0-9-]+\.)*(twilio\.com|twiliocdn\.com)$/i;
+
 async function fetchTwilioMedia(url: string): Promise<Buffer | null> {
   const sid = process.env.TWILIO_ACCOUNT_SID;
   const token = process.env.TWILIO_AUTH_TOKEN;
   if (!sid || !token) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    logger.warn({ url }, "twilio media url unparseable — refusing fetch");
+    return null;
+  }
+  if (parsed.protocol !== "https:") {
+    logger.warn({ url }, "twilio media url not https — refusing fetch");
+    return null;
+  }
+  if (!TWILIO_MEDIA_HOST_RE.test(parsed.hostname)) {
+    logger.warn(
+      { host: parsed.hostname },
+      "twilio media url host not allowlisted — refusing fetch",
+    );
+    return null;
+  }
   try {
     const auth = Buffer.from(`${sid}:${token}`).toString("base64");
-    const res = await fetch(url, { headers: { Authorization: `Basic ${auth}` } });
+    const res = await fetch(parsed.toString(), {
+      headers: { Authorization: `Basic ${auth}` },
+      redirect: "manual",
+    });
+    if (res.status >= 300 && res.status < 400) {
+      // Twilio media often 302s to a signed S3 URL. Re-fetch the redirect
+      // target WITHOUT our auth header — that way our credentials only
+      // ever travel to the Twilio API host.
+      const next = res.headers.get("location");
+      if (!next) return null;
+      const followed = await fetch(next);
+      if (!followed.ok) return null;
+      return Buffer.from(await followed.arrayBuffer());
+    }
     if (!res.ok) {
       logger.warn({ status: res.status, url }, "twilio media fetch failed");
       return null;
     }
-    const arr = await res.arrayBuffer();
-    return Buffer.from(arr);
+    return Buffer.from(await res.arrayBuffer());
   } catch (err) {
     logger.warn({ err, url }, "twilio media fetch threw");
     return null;

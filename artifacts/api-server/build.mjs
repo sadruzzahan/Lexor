@@ -100,6 +100,12 @@ async function buildAll() {
       "puppeteer",
       "puppeteer-core",
       "electron",
+      // pdfkit pulls in fontkit -> brotli -> @swc/helpers via dynamic
+      // requires that esbuild can't trace; bundling produces a runtime
+      // MODULE_NOT_FOUND. Externalize so node resolves them from node_modules.
+      "pdfkit",
+      "fontkit",
+      "brotli",
     ],
     sourcemap: "linked",
     plugins: [

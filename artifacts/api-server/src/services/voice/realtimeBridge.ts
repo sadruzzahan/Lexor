@@ -73,11 +73,22 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
   // -------- OpenAI Realtime side --------
   realtimeWs.on("open", () => {
     realtimeReady = true;
+    // Bake the full disclaimer table into the system prompt so the model
+    // can pick the verbatim text in whatever language the caller turned
+    // out to be speaking — without us hardcoding English-first.
+    const disclaimerTable = Object.entries(SPOKEN_DISCLAIMER)
+      .map(([code, txt]) => `[${code}] ${txt}`)
+      .join("\n\n");
+    const initialLang = callerLang in SPOKEN_DISCLAIMER ? callerLang : "en";
+    const fullInstructions =
+      `${VOICE_SYSTEM_PROMPT}\n\nVERBATIM DISCLAIMER TABLE — ` +
+      `read the entry that matches the caller's language. Do not paraphrase; ` +
+      `the wording is legally significant.\n\n${disclaimerTable}`;
     sendUpstream({
       type: "session.update",
       session: {
         modalities: ["audio", "text"],
-        instructions: VOICE_SYSTEM_PROMPT,
+        instructions: fullInstructions,
         voice: "alloy",
         input_audio_format: "g711_ulaw",
         output_audio_format: "g711_ulaw",
@@ -93,14 +104,17 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
         temperature: 0.7,
       },
     });
-    // Have the model open with the spoken disclaimer verbatim. We force
-    // English first; if the caller responds in another language the model
-    // switches and re-reads the disclaimer per the system prompt.
+    // Open the call with the disclaimer in the language we *deterministically*
+    // know (derived from the caller's E.164 country code in TwiML, defaulting
+    // to English). If the caller responds in a different language, the system
+    // prompt instructs the model to switch and re-read the disclaimer.
     sendUpstream({
       type: "response.create",
       response: {
         modalities: ["audio", "text"],
-        instructions: `Read this verbatim, with warmth, then pause for the caller: ${SPOKEN_DISCLAIMER.en}`,
+        instructions:
+          `This is the FIRST turn of the call. Read this verbatim, with warmth, then pause for the caller: ` +
+          SPOKEN_DISCLAIMER[initialLang],
       },
     });
     // Flush anything that was buffered while we were connecting.
