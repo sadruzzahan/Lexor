@@ -1,0 +1,161 @@
+import { useEffect, useState } from "react";
+import { useParams, Link } from "wouter";
+import { motion } from "framer-motion";
+import {
+  Shield,
+  Swords,
+  Building2,
+  Users2,
+  MapPin,
+  ArrowLeft,
+  Loader2,
+} from "lucide-react";
+import { useDocumentTitle } from "@/lib/hooks";
+import { getCase, type CaseRow } from "@/lib/api";
+import { Defense } from "@/components/case/Defense";
+import { CounterAttack } from "@/components/case/CounterAttack";
+import { useEventStream } from "@/lib/sse";
+import { eventStreamUrl } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+const TABS = [
+  { id: "defense", label: "Defense", Icon: Shield },
+  { id: "counter", label: "Counter-attack", Icon: Swords },
+  { id: "adversary", label: "Adversary", Icon: Building2 },
+  { id: "coalition", label: "Coalition", Icon: Users2 },
+  { id: "map", label: "Map", Icon: MapPin },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+export default function CasePage() {
+  const params = useParams<{ caseId: string }>();
+  const caseId = params.caseId;
+  useDocumentTitle("Case — Lexor");
+
+  const [row, setRow] = useState<CaseRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<TabId>("defense");
+  const { isComplete } = useEventStream(caseId ? eventStreamUrl(caseId) : null);
+
+  useEffect(() => {
+    if (!caseId) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    async function load() {
+      try {
+        const r = await getCase(caseId!);
+        if (!alive) return;
+        setRow(r);
+        setLoading(false);
+        if (r.status !== "complete" && r.status !== "failed") {
+          timer = setTimeout(load, 1500);
+        }
+      } catch {
+        if (alive) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      alive = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [caseId, isComplete]);
+
+  if (!caseId) return null;
+  if (loading) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center text-fg-muted">
+        <Loader2 className="animate-spin size-5 mr-2" /> Loading case…
+      </div>
+    );
+  }
+  if (!row) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center text-fg-muted gap-3">
+        <div>We couldn't find this case.</div>
+        <Link href="/upload" className="text-accent underline-offset-4 hover:underline">
+          Start a new one
+        </Link>
+      </div>
+    );
+  }
+
+  const isPending = row.status !== "complete" && row.status !== "failed";
+
+  return (
+    <section className="mx-auto max-w-5xl px-4 md:px-6 py-8 md:py-12">
+      <Link
+        href="/upload"
+        className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg mb-6"
+      >
+        <ArrowLeft className="size-3.5" /> New case
+      </Link>
+
+      <header className="mb-8">
+        <div className="text-xs uppercase tracking-wider text-fg-subtle">
+          Case · {caseId.slice(0, 8)}
+        </div>
+        <h1 className="font-display text-3xl md:text-4xl tracking-tight mt-1 capitalize">
+          {row.vertical === "other" ? "Legal letter" : row.vertical}
+          {row.jurisdiction ? ` · ${row.jurisdiction}` : ""}
+        </h1>
+        {isPending && (
+          <div className="mt-3 inline-flex items-center gap-2 text-sm text-accent">
+            <Loader2 className="animate-spin size-4" />
+            Pipeline running… ({row.status})
+          </div>
+        )}
+      </header>
+
+      <div
+        role="tablist"
+        aria-label="Case sections"
+        className="flex flex-wrap gap-1 border-b border-border mb-6"
+      >
+        {TABS.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={cn(
+              "relative inline-flex items-center gap-2 px-4 py-2.5 text-sm transition-colors rounded-t-base",
+              tab === id
+                ? "text-fg"
+                : "text-fg-muted hover:text-fg",
+            )}
+          >
+            <Icon className="size-4" />
+            {label}
+            {tab === id && (
+              <motion.div
+                layoutId="case-tab-indicator"
+                className="absolute -bottom-px left-2 right-2 h-[2px] bg-accent"
+              />
+            )}
+          </button>
+        ))}
+      </div>
+
+      <div>
+        {tab === "defense" && <Defense row={row} />}
+        {tab === "counter" && <CounterAttack row={row} />}
+        {tab === "adversary" && <Deferred title="Adversary Dossier" />}
+        {tab === "coalition" && <Deferred title="Coalition Builder" />}
+        {tab === "map" && <Deferred title="Predator Map" />}
+      </div>
+    </section>
+  );
+}
+
+function Deferred({ title }: { title: string }) {
+  return (
+    <div className="rounded-lg2 border border-dashed border-border-strong bg-bg-elevated/40 p-10 text-center">
+      <div className="font-display text-xl text-fg">{title}</div>
+      <p className="mt-2 text-fg-muted text-sm max-w-md mx-auto">
+        Lights up in a later build pass. The Defense and Counter-attack tabs
+        are live now.
+      </p>
+    </div>
+  );
+}

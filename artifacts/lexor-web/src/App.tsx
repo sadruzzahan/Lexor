@@ -3,8 +3,6 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { Toaster } from "sonner";
 import { useDisclaimer } from "@/lib/disclaimer";
 import {
-  Upload as UploadIcon,
-  FileText,
   MapPin,
   Users2,
   Building2,
@@ -18,6 +16,8 @@ import { CommandPalette } from "@/components/CommandPalette";
 import Home from "@/pages/Home";
 import About from "@/pages/About";
 import DisclaimerPage from "@/pages/Disclaimer";
+import UploadPage from "@/pages/Upload";
+import CasePage from "@/pages/Case";
 import { Soon } from "@/pages/Soon";
 import NotFound from "@/pages/not-found";
 
@@ -25,12 +25,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
-      <Route path="/upload">
-        <Soon titleKey="page.upload.title" Icon={UploadIcon} />
-      </Route>
-      <Route path="/c/:caseId">
-        <Soon titleKey="page.case.title" Icon={FileText} />
-      </Route>
+      <Route path="/upload" component={UploadPage} />
+      <Route path="/c/:caseId" component={CasePage} />
       <Route path="/map">
         <Soon titleKey="page.map.title" Icon={MapPin} />
       </Route>

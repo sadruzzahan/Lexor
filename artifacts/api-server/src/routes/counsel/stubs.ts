@@ -44,9 +44,6 @@ coalitionsRouter.post(
   notImplemented("Coalition lawyer bid"),
 );
 
-export const regulatorsRouter: IRouter = Router();
-regulatorsRouter.post("/regulators/file", notImplemented("Regulator filing"));
-
 // Voice + WhatsApp routers are mounted under their own subpath in index.ts.
 export const voiceRouter: IRouter = Router();
 voiceRouter.post("/incoming", notImplemented("Voice incoming"));
