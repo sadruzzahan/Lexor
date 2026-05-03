@@ -527,11 +527,17 @@ export async function ackDisclosure(
   version: string,
   sessionId: string,
 ): Promise<void> {
-  await fetch(`${API}/disclosures/ack`, {
+  const r = await fetch(`${API}/disclosures/ack`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ version, sessionId }),
   });
+  // Mandatory audit row: callers (e.g. Hearing Coach) rely on this
+  // throwing to block session start when the server didn't actually
+  // record the acknowledgement.
+  if (!r.ok) {
+    throw new Error(`ackDisclosure failed: ${r.status}`);
+  }
 }
 
 export async function runTrial(
