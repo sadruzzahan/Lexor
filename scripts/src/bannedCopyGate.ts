@@ -1,10 +1,13 @@
 /**
  * Banned-copy grep gate. Fails if any FTC/DoNotPay-aligned banned phrase
- * (build plan §10.2) appears in user-visible code under artifacts/lexor-web.
+ * (build plan §10.2) appears in user-visible code under artifacts/lexor-web,
+ * AND — when a build is present — in the bundled output under
+ * artifacts/lexor-web/dist. The bundle scan catches regressions that arrive
+ * via dependencies or build-time string composition.
  *
  * Run with: pnpm --filter @workspace/scripts run banned-copy-gate
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { execSync } from "node:child_process";
 
@@ -22,6 +25,9 @@ const ROOTS = [
   "artifacts/lexor-web/src",
   "artifacts/lexor-web/index.html",
 ];
+
+const BUNDLE_ROOT = "artifacts/lexor-web/dist";
+const BUNDLE_EXTS = [".html", ".js", ".css", ".txt", ".json"];
 
 function listFiles(): string[] {
   const out: string[] = [];
@@ -49,6 +55,38 @@ function listFiles(): string[] {
   return out;
 }
 
+function listBundleFiles(): string[] {
+  const root = join(process.cwd(), BUNDLE_ROOT);
+  if (!existsSync(root)) return [];
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      const full = join(dir, name);
+      let st;
+      try {
+        st = statSync(full);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (BUNDLE_EXTS.some((ext) => name.endsWith(ext))) {
+        out.push(relative(process.cwd(), full));
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
 interface Hit {
   file: string;
   line: number;
@@ -58,7 +96,8 @@ interface Hit {
 
 function scan(): Hit[] {
   const hits: Hit[] = [];
-  for (const f of listFiles()) {
+  const files = [...listFiles(), ...listBundleFiles()];
+  for (const f of files) {
     let body: string;
     try {
       body = readFileSync(join(process.cwd(), f), "utf8");
@@ -85,9 +124,11 @@ function scan(): Hit[] {
 }
 
 function main(): void {
+  const bundlePresent = existsSync(join(process.cwd(), BUNDLE_ROOT));
   const hits = scan();
   if (hits.length === 0) {
-    console.log("[banned-copy] PASS — no banned marketing copy found.");
+    const where = bundlePresent ? "source + dist bundle" : "source only (no dist/ found — run `pnpm --filter @workspace/lexor-web run build` for full coverage)";
+    console.log(`[banned-copy] PASS — no banned marketing copy found (${where}).`);
     process.exit(0);
   }
   console.error(`[banned-copy] FAIL — ${hits.length} banned phrase(s):`);

@@ -72,6 +72,16 @@ endpoints verify the Twilio signature server-side, so make sure
 
 ## 5 · Smoke test
 
+Run the scripted smoke test against the deployed URL — it pings the landing,
+upload, map, voice, and disclaimer pages plus the public API surfaces and asserts
+each returns 200 with the Lexor shell:
+
+```bash
+LEXOR_PROD_URL=https://<your-domain> pnpm --filter @workspace/scripts run smoke-test
+```
+
+Then walk the manual checks:
+
 1. Open the production URL, accept the disclaimer, and drag a sample eviction notice onto
    the upload card. Confirm the case page renders Defense + Counter-attack tabs with at
    least one citation.

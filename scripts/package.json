@@ -8,6 +8,7 @@
     "coach-acceptance": "tsx ./src/coachAcceptance.ts",
     "inbox-acceptance": "tsx ./src/inboxAcceptance.ts",
     "banned-copy-gate": "tsx ./src/bannedCopyGate.ts",
+    "smoke-test": "tsx ./src/smokeTest.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

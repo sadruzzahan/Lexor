@@ -24,9 +24,9 @@ function flattenToString(children: ReactNode): string {
 
 /**
  * Word-stagger reveal for long-copy blocks. Honors prefers-reduced-motion
- * with a simple fade. Renders the original text into the chosen tag, then
- * splits visible words for the animation while preserving inline structure
- * for screen readers via an sr-only mirror.
+ * with a simple fade. Splits the visible text into per-word spans for the
+ * animation; assistive tech reads the full sentence via `aria-label` on the
+ * container while the per-word spans are hidden with `aria-hidden="true"`.
  */
 export function RevealText(props: RevealTextProps) {
   const { children, as = "p", className, delay = 0, stagger = 0.025 } = props;
