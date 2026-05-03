@@ -128,10 +128,19 @@ export function HearingCoach({ row }: { row: CaseRow }) {
   const inFlightCtrlRef = useRef<AbortController | null>(null);
   const utteranceQueueRef = useRef<SpeechSynthesisUtterance[]>([]);
   const mutedRef = useRef(false);
+  // SpeechRecognition's onend handler captures `listening` at closure
+  // creation time — but at that moment we've just called startListening
+  // and the React state hasn't flushed yet, so the captured value would
+  // always be `false` and the auto-restart never fires. Reading from a
+  // ref keeps the handler in sync with the live session state.
+  const listeningRef = useRef(false);
 
   useEffect(() => {
     mutedRef.current = muted;
   }, [muted]);
+  useEffect(() => {
+    listeningRef.current = listening;
+  }, [listening]);
 
   // Capability detection — surfaced in the UI so the user sees why we
   // gated the start button if browser STT is missing.
@@ -325,8 +334,11 @@ export function HearingCoach({ row }: { row: CaseRow }) {
     r.onend = () => {
       // Auto-restart while the session is still active — the browser
       // sometimes terminates after a long silence and we want the
-      // hearing to keep being heard.
-      if (recognitionRef.current === r && listening) {
+      // hearing to keep being heard. Read live state from the ref;
+      // the captured `listening` would still be `false` here because
+      // setListening(true) below hasn't flushed when this closure was
+      // created.
+      if (recognitionRef.current === r && listeningRef.current) {
         try {
           r.start();
         } catch {
@@ -335,6 +347,7 @@ export function HearingCoach({ row }: { row: CaseRow }) {
       }
     };
     recognitionRef.current = r;
+    listeningRef.current = true;
     setListening(true);
     setMuted(false);
     try {
@@ -349,6 +362,9 @@ export function HearingCoach({ row }: { row: CaseRow }) {
   }, [brief?.brief, listening, speak]);
 
   const stopListening = useCallback(() => {
+    // Flip the ref BEFORE calling stop() so the onend restart guard
+    // sees the new value and doesn't immediately revive the session.
+    listeningRef.current = false;
     setListening(false);
     const r = recognitionRef.current;
     recognitionRef.current = null;
