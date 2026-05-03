@@ -20,9 +20,13 @@ import { resolveAlert } from "./ingest";
 
 export async function sendInboxAlertReply(
   alertId: string,
+  expectedUserId: string,
 ): Promise<{ ok: boolean; status?: string; error?: string }> {
   if (!/^[0-9a-f-]{36}$/i.test(alertId)) {
     return { ok: false, error: "invalid_alert_id" };
+  }
+  if (!expectedUserId) {
+    return { ok: false, error: "missing_owner_binding" };
   }
   const [alert] = await db
     .select()
@@ -30,6 +34,17 @@ export async function sendInboxAlertReply(
     .where(eq(inboxAlertsTable.id, alertId))
     .limit(1);
   if (!alert) return { ok: false, error: "not_found" };
+  if (alert.userId !== expectedUserId) {
+    // Ownership guard — refuse to send a reply on behalf of any user
+    // other than the one whose call/session is bound to this tool
+    // invocation. Prevents a leaked alert UUID from being replied-to
+    // through a different caller's voice session.
+    logger.warn(
+      { alertId, expectedUserId, actualUserId: alert.userId },
+      "inbox send: ownership mismatch refused",
+    );
+    return { ok: false, error: "ownership_mismatch" };
+  }
   if (alert.status !== "fired" && alert.status !== "dispatched") {
     return { ok: false, error: `wrong_state:${alert.status}` };
   }
@@ -59,9 +74,26 @@ export async function sendInboxAlertReply(
 export async function textAlertDeeplink(opts: {
   alertId: string;
   toPhone: string;
+  expectedUserId: string;
 }): Promise<{ ok: boolean; sent?: boolean; url?: string; error?: string }> {
   if (!/^[0-9a-f-]{36}$/i.test(opts.alertId)) {
     return { ok: false, error: "invalid_alert_id" };
+  }
+  if (!opts.expectedUserId) {
+    return { ok: false, error: "missing_owner_binding" };
+  }
+  const [alert] = await db
+    .select({ id: inboxAlertsTable.id, userId: inboxAlertsTable.userId })
+    .from(inboxAlertsTable)
+    .where(eq(inboxAlertsTable.id, opts.alertId))
+    .limit(1);
+  if (!alert) return { ok: false, error: "not_found" };
+  if (alert.userId !== opts.expectedUserId) {
+    logger.warn(
+      { alertId: opts.alertId, expectedUserId: opts.expectedUserId },
+      "inbox text-deeplink: ownership mismatch refused",
+    );
+    return { ok: false, error: "ownership_mismatch" };
   }
   const host = (process.env.REPLIT_DOMAINS ?? "").split(",")[0]?.trim();
   if (!host) return { ok: false, error: "no_public_host" };

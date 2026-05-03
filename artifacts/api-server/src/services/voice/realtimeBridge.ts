@@ -49,6 +49,11 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
    *  and exposes the alertId to the send_email_reply / open_case_on_device
    *  voice tools so the model never has to guess it. */
   let preloadedAlertId: string | null = null;
+  /** Owner of the preloaded alert. The realtime bridge is a public
+   *  voice channel, so we bind every send/text tool call to the
+   *  exact userId we resolved at preload time. Without this, a
+   *  leaked alert UUID could be replied-to from any caller's session. */
+  let preloadedUserId: string | null = null;
   /** Tracks the active assistant audio response so we can cancel for barge-in. */
   let activeResponseId: string | null = null;
 
@@ -279,23 +284,25 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
           break;
         }
         case "send_email_reply": {
-          // Always prefer the server-side preloaded alertId — the model
-          // doesn't need to know it, and we refuse to send for any other
-          // alert id even if the model hallucinates one.
-          const alertId = preloadedAlertId ?? String(args.alertId ?? "");
-          if (
-            preloadedAlertId &&
-            args.alertId &&
-            args.alertId !== preloadedAlertId
-          ) {
+          // HARD LOCK: we will only send for an alert that was preloaded
+          // into THIS session. The model-supplied `alertId` arg is
+          // ignored as input but verified for mismatch so we can log
+          // hallucinations. No preload → no send, period.
+          if (!preloadedAlertId || !preloadedUserId) {
+            output = {
+              ok: false,
+              error: "no_preloaded_alert_for_session",
+              saySorry:
+                "Tell the caller you can only send a reply when the call was placed by an inbox alert.",
+            };
+            break;
+          }
+          if (args.alertId && args.alertId !== preloadedAlertId) {
             output = { ok: false, error: "alert_id_mismatch_with_session" };
             break;
           }
+          const alertId = preloadedAlertId;
           const confirmed = args.confirmedBySpeech === true;
-          if (!alertId) {
-            output = { error: "alertId required" };
-            break;
-          }
           if (!confirmed) {
             // Hard refusal — the assistant is required to get explicit
             // verbal confirmation before sending. We never ship without
@@ -310,7 +317,7 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
           }
           try {
             const { sendInboxAlertReply } = await import("../inbox/sendReply");
-            const r = await sendInboxAlertReply(alertId);
+            const r = await sendInboxAlertReply(alertId, preloadedUserId);
             output = r;
           } catch (err) {
             output = { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -318,14 +325,28 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
           break;
         }
         case "open_case_on_device": {
-          const alertId = preloadedAlertId ?? String(args.alertId ?? "");
-          if (!alertId || !callerPhone) {
-            output = { ok: false, error: "alertId and caller phone required" };
+          // Same hard lock — we'll only text the deeplink for an alert
+          // bound to this session, to the caller's verified phone.
+          if (!preloadedAlertId || !preloadedUserId) {
+            output = { ok: false, error: "no_preloaded_alert_for_session" };
             break;
           }
+          if (!callerPhone) {
+            output = { ok: false, error: "caller_phone_required" };
+            break;
+          }
+          if (args.alertId && args.alertId !== preloadedAlertId) {
+            output = { ok: false, error: "alert_id_mismatch_with_session" };
+            break;
+          }
+          const alertId = preloadedAlertId;
           try {
             const { textAlertDeeplink } = await import("../inbox/sendReply");
-            const r = await textAlertDeeplink({ alertId, toPhone: callerPhone });
+            const r = await textAlertDeeplink({
+              alertId,
+              toPhone: callerPhone,
+              expectedUserId: preloadedUserId,
+            });
             output = r;
           } catch (err) {
             output = { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -388,7 +409,11 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
           // so the model can read the gist/deadline aloud and call the
           // inbox tools with the right alertId. Errors here must NOT
           // tear down the call; we just continue without preload.
-          void preloadInboxAlertContextImpl(sendUpstream, alertIdParam);
+          void preloadInboxAlertContextImpl(sendUpstream, alertIdParam).then(
+            (userId) => {
+              if (userId) preloadedUserId = userId;
+            },
+          );
         }
         const externalId = start?.callSid ?? streamSid ?? `unknown-${Date.now()}`;
         if (callerPhone) {
@@ -541,7 +566,7 @@ const TOOL_DEFINITIONS = [
 async function preloadInboxAlertContextImpl(
   realtimeSend: (payload: object) => void,
   alertId: string,
-): Promise<void> {
+): Promise<string | null> {
   try {
     const { db: d, inboxAlertsTable } = await import("@workspace/db");
     const [alert] = await d
@@ -551,7 +576,7 @@ async function preloadInboxAlertContextImpl(
       .limit(1);
     if (!alert) {
       logger.warn({ alertId }, "preload alert: not found");
-      return;
+      return null;
     }
     const lines = [
       `INBOX SENTINEL CONTEXT — this call was triggered by an inbox alert.`,
@@ -581,8 +606,10 @@ async function preloadInboxAlertContextImpl(
         content: [{ type: "input_text", text: lines }],
       },
     });
+    return alert.userId;
   } catch (err) {
     logger.warn({ err, alertId }, "preload inbox alert context failed");
+    return null;
   }
 }
 
