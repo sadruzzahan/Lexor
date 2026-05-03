@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "gmail_watches_email_unique_enabled_idx" ON "gmail_watches" USING btree ("gmail_email") WHERE "gmail_watches"."enabled" = true AND "gmail_watches"."gmail_email" IS NOT NULL;

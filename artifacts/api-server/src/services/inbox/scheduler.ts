@@ -75,6 +75,20 @@ async function tick(): Promise<void> {
   const messages = await listInboxSince(sinceSec, 20);
   if (messages.length === 0) return;
 
+  // Defense-in-depth: even though /inbox/enable refuses a second
+  // binding for the same gmailEmail, we recompute here. If somehow more
+  // than one enabled watch matches the connector owner email we refuse
+  // to dispatch ANY of them rather than risk a fan-out.
+  const ownerWatches = watches.filter(
+    (w) => (w.gmailEmail ?? "").toLowerCase() === ownerEmail,
+  );
+  if (ownerWatches.length > 1) {
+    logger.error(
+      { count: ownerWatches.length, ownerEmail },
+      "inbox scheduler: REFUSING to dispatch — multiple watches bound to the same connector mailbox",
+    );
+    return;
+  }
   for (const watch of watches) {
     if ((watch.gmailEmail ?? "").toLowerCase() !== ownerEmail) {
       logger.warn(

@@ -6,8 +6,10 @@ import {
   jsonb,
   timestamp,
   index,
+  uniqueIndex,
   boolean,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * Per-user Gmail watch row. We don't store OAuth tokens — those live in
@@ -45,7 +47,18 @@ export const gmailWatchesTable = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("gmail_watches_user_id_idx").on(t.userId)],
+  (t) => [
+    index("gmail_watches_user_id_idx").on(t.userId),
+    // HARD multi-tenancy guard: only one enabled watch per Gmail
+    // address. Combined with the connector-owner refusal in
+    // /inbox/enable, this makes it physically impossible for two
+    // distinct app users to both bind the (currently global) Replit
+    // Gmail connector — which would otherwise let one mailbox's
+    // messages be alerted under multiple unrelated users.
+    uniqueIndex("gmail_watches_email_unique_enabled_idx")
+      .on(t.gmailEmail)
+      .where(sql`${t.enabled} = true AND ${t.gmailEmail} IS NOT NULL`),
+  ],
 );
 
 export const inboxAlertStatus = pgEnum("inbox_alert_status", [

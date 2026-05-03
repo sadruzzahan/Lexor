@@ -36,9 +36,17 @@ router.get("/inbox/status", async (req: Request, res: Response) => {
   // opted in yet.
   const connectorReady = await isGmailConnected();
   const profile = connectorReady ? await getGmailProfile() : null;
+  // Only reveal the connected mailbox address to the user who actually
+  // bound it. A non-owner shouldn't be able to learn the connector
+  // owner's email just by hitting /inbox/status.
+  const isOwner = Boolean(
+    watch?.gmailEmail &&
+      profile?.emailAddress &&
+      watch.gmailEmail.toLowerCase() === profile.emailAddress.toLowerCase(),
+  );
   res.json({
     connectorReady,
-    connectedEmail: profile?.emailAddress ?? null,
+    connectedEmail: isOwner ? (profile?.emailAddress ?? null) : null,
     watch: watch
       ? {
           enabled: watch.enabled,
@@ -84,6 +92,26 @@ router.post(
         503,
         "gmail_not_connected",
         "Gmail integration is not connected. Open the integrations panel and connect Gmail first.",
+      );
+    }
+    // CONNECTOR-OWNER GATE.
+    // The Replit Gmail connector is currently global-scoped (one mailbox
+    // per Repl). If we let any signed-in user bind it, two unrelated
+    // users could both claim the same mailbox and the scheduler would
+    // fan its messages out to both — a tenant-isolation violation.
+    // We refuse here when another userId already owns this gmailEmail.
+    // Per-user OAuth (follow-up #17) replaces this guard with a per-
+    // watch credential lookup.
+    const [conflict] = await db
+      .select({ userId: gmailWatchesTable.userId })
+      .from(gmailWatchesTable)
+      .where(eq(gmailWatchesTable.gmailEmail, profile.emailAddress))
+      .limit(1);
+    if (conflict && conflict.userId !== userId) {
+      throw new HttpError(
+        409,
+        "mailbox_already_bound",
+        "This Gmail account is already bound to another Lexor user on this workspace. Per-user Gmail OAuth is not yet available — only one user can enable Inbox Sentinel against the shared connector.",
       );
     }
     const [existing] = await db
