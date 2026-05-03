@@ -1,10 +1,11 @@
 /**
  * Public-URL smoke test for the deployed Lexor app.
  *
- * Hits the user-facing landing/upload/map/voice pages and the public API
- * health surface, asserting status codes and that the served HTML is the
- * Lexor shell (not a 5xx page). Intended to be run against a deployed
- * `*.replit.app` (or custom domain) URL after publishing.
+ * Walks the user journey end-to-end against the deployed host:
+ *   landing → upload (sample inline-text letter) → poll case →
+ *   assert Defense + Counter-attack content → map → voice → coalitions.
+ *
+ * Also pings the public API surfaces (healthz, voice/info, map/stats).
  *
  * Usage:
  *   LEXOR_PROD_URL=https://your-app.replit.app \
@@ -22,68 +23,12 @@ if (!BASE) {
   process.exit(2);
 }
 
-interface Check {
-  name: string;
-  url: string;
-  expectStatus?: number[];
-  expectBodyIncludes?: string[];
-  method?: "GET" | "POST";
-}
-
-const CHECKS: Check[] = [
-  {
-    name: "landing renders Lexor shell",
-    url: `${BASE}/lexor/`,
-    expectStatus: [200],
-    expectBodyIncludes: ["<title>", "Lexor"],
-  },
-  {
-    name: "upload page loads",
-    url: `${BASE}/lexor/upload`,
-    expectStatus: [200],
-    expectBodyIncludes: ["Lexor"],
-  },
-  {
-    name: "map page loads",
-    url: `${BASE}/lexor/map`,
-    expectStatus: [200],
-    expectBodyIncludes: ["Lexor"],
-  },
-  {
-    name: "voice page loads",
-    url: `${BASE}/lexor/voice`,
-    expectStatus: [200],
-    expectBodyIncludes: ["Lexor"],
-  },
-  {
-    name: "disclaimer page loads",
-    url: `${BASE}/lexor/legal/disclaimer`,
-    expectStatus: [200],
-    expectBodyIncludes: ["Lexor"],
-  },
-  {
-    name: "API healthz responds",
-    url: `${BASE}/api/counsel/healthz`,
-    expectStatus: [200],
-  },
-  {
-    name: "API diagnostics responds",
-    url: `${BASE}/api/counsel/diagnostics`,
-    expectStatus: [200],
-  },
-  {
-    name: "voice info advertises Twilio config",
-    url: `${BASE}/api/counsel/voice/info`,
-    expectStatus: [200],
-    expectBodyIncludes: ["whatsappNumber"],
-  },
-  {
-    name: "map summary returns JSON",
-    url: `${BASE}/api/counsel/map/summary`,
-    expectStatus: [200],
-    expectBodyIncludes: ["totalPins"],
-  },
-];
+const SAMPLE_LETTER = `NOTICE TO QUIT — Three Day Notice to Pay Rent or Quit.
+To Tenant: You are hereby notified that the rent in the amount of $2,400 for
+the premises located at 123 Example Ave., Apt 4B, is past due. You must pay
+the entire amount within three (3) days of service of this notice or surrender
+possession of the premises. Failure to do so will result in the commencement
+of unlawful detainer proceedings against you. Dated this day by the landlord.`;
 
 interface Result {
   name: string;
@@ -91,52 +36,148 @@ interface Result {
   detail: string;
 }
 
-async function runOne(c: Check): Promise<Result> {
+async function check(
+  name: string,
+  fn: () => Promise<string>,
+): Promise<Result> {
   const t0 = Date.now();
   try {
-    const res = await fetch(c.url, {
-      method: c.method ?? "GET",
-      redirect: "follow",
-    });
-    const ms = Date.now() - t0;
-    const expected = c.expectStatus ?? [200];
-    if (!expected.includes(res.status)) {
-      return {
-        name: c.name,
-        ok: false,
-        detail: `status=${res.status} (want ${expected.join("/")}) in ${ms}ms`,
-      };
-    }
-    if (c.expectBodyIncludes && c.expectBodyIncludes.length > 0) {
-      const body = await res.text();
-      for (const needle of c.expectBodyIncludes) {
-        if (!body.includes(needle)) {
-          return {
-            name: c.name,
-            ok: false,
-            detail: `body missing "${needle}" (status=${res.status}, ${ms}ms)`,
-          };
-        }
-      }
-    }
-    return { name: c.name, ok: true, detail: `${res.status} in ${ms}ms` };
+    const detail = await fn();
+    return { name, ok: true, detail: `${detail} in ${Date.now() - t0}ms` };
   } catch (err) {
     return {
-      name: c.name,
+      name,
       ok: false,
-      detail: `fetch error: ${err instanceof Error ? err.message : String(err)}`,
+      detail: `${err instanceof Error ? err.message : String(err)} (${Date.now() - t0}ms)`,
     };
   }
+}
+
+async function expectGet(
+  url: string,
+  expectStatus: number[],
+  expectBodyIncludes: string[] = [],
+): Promise<string> {
+  const res = await fetch(url, { redirect: "follow" });
+  if (!expectStatus.includes(res.status)) {
+    throw new Error(`status=${res.status} (want ${expectStatus.join("/")})`);
+  }
+  if (expectBodyIncludes.length > 0) {
+    const body = await res.text();
+    for (const needle of expectBodyIncludes) {
+      if (!body.includes(needle)) {
+        throw new Error(`body missing "${needle}" (status=${res.status})`);
+      }
+    }
+  }
+  return `${res.status}`;
+}
+
+async function postJson(url: string, body: unknown): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+    redirect: "follow",
+  });
+}
+
+async function uploadAndPollCase(): Promise<string> {
+  const createRes = await postJson(`${BASE}/api/counsel/cases`, {
+    language: "en",
+    inlineText: SAMPLE_LETTER,
+  });
+  if (createRes.status !== 200) {
+    throw new Error(`POST /cases status=${createRes.status}`);
+  }
+  const created = (await createRes.json()) as { caseId?: string };
+  const caseId = created.caseId;
+  if (!caseId) throw new Error("POST /cases returned no caseId");
+
+  // Poll for terminal status. The pipeline runs Claude + retrieval which
+  // can take 20–40s on a cold deploy; allow generous headroom.
+  const deadline = Date.now() + 90_000;
+  let lastStatus = "queued";
+  let lastBody: Record<string, unknown> | null = null;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 2000));
+    const r = await fetch(`${BASE}/api/counsel/cases/${caseId}`);
+    if (r.status !== 200) continue;
+    lastBody = (await r.json()) as Record<string, unknown>;
+    lastStatus = String(lastBody.status ?? "queued");
+    if (lastStatus === "complete" || lastStatus === "error") break;
+  }
+  if (lastStatus !== "complete") {
+    throw new Error(`pipeline did not complete (last status=${lastStatus})`);
+  }
+  // Defense + Counter-attack content lives on the case row as JSON blobs.
+  const blob = JSON.stringify(lastBody ?? {}).toLowerCase();
+  if (!blob.includes("defense")) {
+    throw new Error("case missing Defense content");
+  }
+  if (!blob.includes("counter")) {
+    throw new Error("case missing Counter-attack content");
+  }
+  return `caseId=${caseId.slice(0, 8)}… status=complete, defense+counter present`;
 }
 
 async function main(): Promise<void> {
   console.log(`[smoke] target = ${BASE}\n`);
   const results: Result[] = [];
-  for (const c of CHECKS) {
-    const r = await runOne(c);
-    results.push(r);
-    const tag = r.ok ? "PASS" : "FAIL";
-    console.log(`  [${tag}] ${r.name} — ${r.detail}`);
+  results.push(
+    await check("landing renders Lexor shell", () =>
+      expectGet(`${BASE}/lexor/`, [200], ["<title>", "Lexor"]),
+    ),
+  );
+  results.push(
+    await check("upload page loads", () =>
+      expectGet(`${BASE}/lexor/upload`, [200], ["Lexor"]),
+    ),
+  );
+  results.push(
+    await check("map page loads", () =>
+      expectGet(`${BASE}/lexor/map`, [200], ["Lexor"]),
+    ),
+  );
+  results.push(
+    await check("voice page loads", () =>
+      expectGet(`${BASE}/lexor/voice`, [200], ["Lexor"]),
+    ),
+  );
+  results.push(
+    await check("disclaimer page loads", () =>
+      expectGet(`${BASE}/lexor/legal/disclaimer`, [200], ["Lexor"]),
+    ),
+  );
+  results.push(
+    await check("API healthz responds", () =>
+      expectGet(`${BASE}/api/counsel/healthz`, [200]),
+    ),
+  );
+  results.push(
+    await check("voice info advertises Twilio config", () =>
+      expectGet(`${BASE}/api/counsel/voice/info`, [200], ["whatsappNumber"]),
+    ),
+  );
+  results.push(
+    await check("map stats returns JSON", () =>
+      expectGet(`${BASE}/api/counsel/map/stats`, [200], ["totalPins"]),
+    ),
+  );
+  results.push(
+    await check("coalitions list responds", () =>
+      expectGet(`${BASE}/api/counsel/coalitions`, [200]),
+    ),
+  );
+  results.push(
+    await check(
+      "upload sample letter → case completes with Defense + Counter-attack",
+      uploadAndPollCase,
+    ),
+  );
+
+  for (const r of results) {
+    console.log(`  [${r.ok ? "PASS" : "FAIL"}] ${r.name} — ${r.detail}`);
   }
   const failed = results.filter((r) => !r.ok);
   console.log(

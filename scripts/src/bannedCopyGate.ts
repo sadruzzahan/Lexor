@@ -26,7 +26,7 @@ const ROOTS = [
   "artifacts/lexor-web/index.html",
 ];
 
-const BUNDLE_ROOT = "artifacts/lexor-web/dist";
+const BUNDLE_ROOT = "artifacts/lexor-web/dist/public";
 const BUNDLE_EXTS = [".html", ".js", ".css", ".txt", ".json"];
 
 function listFiles(): string[] {
@@ -125,9 +125,18 @@ function scan(): Hit[] {
 
 function main(): void {
   const bundlePresent = existsSync(join(process.cwd(), BUNDLE_ROOT));
+  const requireBundle = process.env.BANNED_COPY_REQUIRE_BUNDLE === "1";
+  if (requireBundle && !bundlePresent) {
+    console.error(
+      `[banned-copy] FAIL — BANNED_COPY_REQUIRE_BUNDLE=1 but no built bundle at ${BUNDLE_ROOT}. Run \`pnpm --filter @workspace/lexor-web run build\` first.`,
+    );
+    process.exit(1);
+  }
   const hits = scan();
   if (hits.length === 0) {
-    const where = bundlePresent ? "source + dist bundle" : "source only (no dist/ found — run `pnpm --filter @workspace/lexor-web run build` for full coverage)";
+    const where = bundlePresent
+      ? `source + ${BUNDLE_ROOT}`
+      : `source only (no ${BUNDLE_ROOT} found — run \`pnpm --filter @workspace/lexor-web run build\` for full coverage, or set BANNED_COPY_REQUIRE_BUNDLE=1 to require it)`;
     console.log(`[banned-copy] PASS — no banned marketing copy found (${where}).`);
     process.exit(0);
   }
