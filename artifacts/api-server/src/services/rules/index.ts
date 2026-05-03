@@ -3,6 +3,7 @@ import type { Vertical } from "../classify";
 import { detectEvictionViolations } from "./eviction";
 import { detectDebtViolations } from "./debt";
 import { detectWageViolations } from "./wage";
+import { detectContractViolations } from "./contract";
 
 export type Severity = "low" | "medium" | "high" | "critical";
 
@@ -76,6 +77,8 @@ export function runRules(
       return detectDebtViolations(extraction);
     case "wage":
       return detectWageViolations(extraction, jurisdiction);
+    case "contract":
+      return detectContractViolations(extraction);
     default:
       return [];
   }

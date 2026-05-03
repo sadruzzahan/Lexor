@@ -1,6 +1,6 @@
 import type { Extraction } from "./vision";
 
-export type Vertical = "eviction" | "debt" | "wage" | "other";
+export type Vertical = "eviction" | "debt" | "wage" | "contract" | "other";
 
 const KEYWORDS: Record<Exclude<Vertical, "other">, RegExp[]> = {
   eviction: [
@@ -37,6 +37,30 @@ const KEYWORDS: Record<Exclude<Vertical, "other">, RegExp[]> = {
     /payroll/i,
     /your last day/i,
   ],
+  contract: [
+    /breach of (contract|agreement|MSA|NDA|SLA)/i,
+    /master service agreement/i,
+    /\bMSA\b/,
+    /legal demand/i,
+    /demand (notice|letter)/i,
+    /tortious interference/i,
+    /unjust enrichment/i,
+    /misappropriat/i,
+    /intellectual property/i,
+    /source code/i,
+    /liquidated damages/i,
+    /indemnif/i,
+    /obfuscat/i,
+    /fraud(ulent)?/i,
+    /specific performance/i,
+    /injunctive relief/i,
+    /arbitration clause/i,
+    /scope of work/i,
+    /deliverable/i,
+    /compound interest/i,
+    /legal fees and court costs/i,
+    /advocate|barrister|solicitor/i,
+  ],
 };
 
 export function classify(extraction: Extraction): Vertical {
@@ -53,9 +77,10 @@ export function classify(extraction: Extraction): Vertical {
     eviction: 0,
     debt: 0,
     wage: 0,
+    contract: 0,
     other: 0,
   };
-  for (const v of ["eviction", "debt", "wage"] as const) {
+  for (const v of ["eviction", "debt", "wage", "contract"] as const) {
     for (const re of KEYWORDS[v]) {
       if (re.test(haystack)) scores[v] += 1;
     }

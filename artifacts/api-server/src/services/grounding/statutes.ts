@@ -111,7 +111,67 @@ const STATUTES: Statute[] = [
   },
 ];
 
-const BY_CODE = new Map(STATUTES.map((s) => [s.code.toLowerCase(), s]));
+// ── Contract-dispute statutes ──────────────────────────────────────────────
+const CONTRACT_STATUTES: Statute[] = [
+  {
+    code: "UCC § 1-304 / Restatement (Second) of Contracts § 205",
+    jurisdiction: "US",
+    title: "Good faith and fair dealing in contract performance",
+    url: "https://www.law.cornell.edu/ucc/1/1-304",
+    summary:
+      "Every contract or duty within the UCC imposes an obligation of good faith in its performance and enforcement. The Restatement (Second) § 205 extends this to all contracts: a party that exercises a right in bad faith — including imposing coercive deadlines — may be liable for breach of the implied covenant.",
+    text: "Every contract or duty within [the UCC] imposes an obligation of good faith in its performance and enforcement. (UCC § 1-304). A party to a contract acts in bad faith when it evades the spirit of the bargain, lacks diligence, or deliberately uses the agreement to harm the other party's interests. (Restatement § 205 comment d.)",
+  },
+  {
+    code: "Restatement (Third) of Restitution § 53",
+    jurisdiction: "US",
+    title: "Interest on money claims — compound interest",
+    url: "https://www.ali.org/publications/show/restatement-law-third-restitution-and-unjust-enrichment/",
+    summary:
+      "Pre-judgment interest on contract claims is ordinarily simple interest at the applicable statutory rate. Compound interest is available only where the contract expressly provides for it or where the defendant's misconduct (e.g., fraud) makes simple interest an inadequate remedy.",
+    text: "Interest as restitution is simple interest at the rate applicable to judgments in the relevant jurisdiction, unless compounding is required to prevent unjust enrichment or the contract specifies a different rate and compounding method. (Restatement (Third) of Restitution § 53, comment b.)",
+  },
+  {
+    code: "Fed. R. Civ. P. 26(a)(2)",
+    jurisdiction: "US",
+    title: "Disclosure of expert testimony — identity and report",
+    url: "https://www.law.cornell.edu/rules/frcp/rule_26",
+    summary:
+      "A party must disclose the identity of any expert witness and provide a written report prepared and signed by the expert containing all opinions and the basis for them. Undisclosed expert evidence is generally inadmissible.",
+    text: "In addition to the disclosures required by Rule 26(a)(1), a party must disclose to the other parties the identity of any witness it may use at trial to present evidence under Federal Rule of Evidence 702, 703, or 705. ... This disclosure must be accompanied by a written report — prepared and signed by the witness — if the witness is one retained or specially employed to provide expert testimony. (Fed. R. Civ. P. 26(a)(2)(A)-(B).)",
+  },
+  {
+    code: "18 U.S.C. § 1836 (DTSA)",
+    jurisdiction: "US",
+    title: "Defend Trade Secrets Act — misappropriation and remedies",
+    url: "https://www.law.cornell.edu/uscode/text/18/1836",
+    summary:
+      "The DTSA provides a federal civil cause of action for trade-secret misappropriation. Injunctive relief and seizure require a court order; voluntary disclosure of trade secrets without a court order may waive protection.",
+    text: "An owner of a trade secret that is misappropriated may bring a civil action under this subsection if the trade secret is related to a product or service used in, or intended for use in, interstate or foreign commerce. (18 U.S.C. § 1836(b)(1).) The court may grant an injunction to prevent any actual or threatened misappropriation and award exemplary damages up to two times the actual damages for willful and malicious misappropriation.",
+  },
+  {
+    code: "Restatement (Second) of Contracts § 204",
+    jurisdiction: "US",
+    title: "Supplying omitted essential terms — identifying the contract",
+    url: "https://www.ali.org/publications/show/restatement-law-second-contracts-2/",
+    summary:
+      "A breach-of-contract claim requires identification of a specific, enforceable agreement. Where an essential term (including which document is alleged to be the contract) is omitted, the claim is deficient until the contract is produced and identified.",
+    text: "When the parties to a bargain sufficiently defined to be a contract have not agreed with respect to a term which is essential to a determination of their rights and duties, a term which is reasonable in the circumstances is supplied by the court. (§ 204.) Where no agreement can be identified, there is no enforceable contract obligation.",
+  },
+  {
+    code: "Restatement (Second) of Contracts § 176",
+    jurisdiction: "US",
+    title: "Duress by threat — improper threats",
+    url: "https://www.ali.org/publications/show/restatement-law-second-contracts-2/",
+    summary:
+      "A threat is improper if it constitutes a crime or tort, or if the resulting exchange is not on fair terms. Threatening criminal prosecution to obtain a civil payment is duress and may void any resulting agreement; it may also constitute extortion under state law.",
+    text: "A threat is improper if (a) what is threatened is a crime or a tort, or the threat itself would be a crime or a tort if it resulted in obtaining property... A contract induced by improper duress is voidable by the victim. (Restatement (Second) of Contracts § 175-176.)",
+  },
+];
+
+const BY_CODE = new Map(
+  [...STATUTES, ...CONTRACT_STATUTES].map((s) => [s.code.toLowerCase(), s]),
+);
 
 export function getStatute(code: string): Statute | undefined {
   return BY_CODE.get(code.toLowerCase());

@@ -26,6 +26,7 @@ export const caseVertical = pgEnum("case_vertical", [
   "eviction",
   "debt",
   "wage",
+  "contract",
   "other",
 ]);
 
