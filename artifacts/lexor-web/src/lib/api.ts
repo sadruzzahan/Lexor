@@ -449,3 +449,53 @@ export async function voteCoalitionBid(
     throw new Error(`voteCoalitionBid failed: ${r.status} ${text}`);
   }
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Mirror Trial (Feature 6 — stretch)
+// ────────────────────────────────────────────────────────────────────
+
+export type TrialCharacter = "opposing" | "judge" | "your_counsel";
+export type TrialOutcome = "plaintiff" | "defendant" | "mixed" | "undetermined";
+
+export interface TrialTurnView {
+  ord: number;
+  character: TrialCharacter;
+  line: string;
+  citation: string | null;
+}
+
+export interface TrialView {
+  id: string;
+  caseId: string;
+  status: "queued" | "running" | "complete" | "failed";
+  predictedOutcome: TrialOutcome | null;
+  predictedRationale: string | null;
+  swingArguments: string[];
+  startedAt: string;
+  completedAt: string | null;
+  turns: TrialTurnView[];
+}
+
+export async function getTrial(caseId: string): Promise<TrialView | null> {
+  const r = await fetch(`${API}/cases/${caseId}/trial`);
+  if (!r.ok) throw new Error(`getTrial failed: ${r.status}`);
+  const j = (await r.json()) as { trial: TrialView | null };
+  return j.trial;
+}
+
+export async function runTrial(
+  caseId: string,
+  opts: { force?: boolean } = {},
+): Promise<TrialView> {
+  const r = await fetch(`${API}/cases/${caseId}/trial`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`runTrial failed: ${r.status} ${text}`);
+  }
+  const j = (await r.json()) as { trial: TrialView };
+  return j.trial;
+}

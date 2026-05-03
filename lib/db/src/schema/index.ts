@@ -8,3 +8,4 @@ export * from "./sessions";
 export * from "./disclosures";
 export * from "./coalitionVotes";
 export * from "./notifications";
+export * from "./trials";

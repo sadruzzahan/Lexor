@@ -10,6 +10,7 @@ import devSeedRouter from "./devSeed";
 import voiceRouter from "./voice";
 import whatsappRouter from "./whatsapp";
 import coalitionsRouter from "./coalitions";
+import trialsRouter from "./trials";
 
 const router: IRouter = Router();
 
@@ -27,5 +28,6 @@ router.use("/voice", voiceRouter);
 router.use("/whatsapp", whatsappRouter);
 
 router.use(coalitionsRouter);
+router.use(trialsRouter);
 
 export default router;
