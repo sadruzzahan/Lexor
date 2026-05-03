@@ -1,3 +1,9 @@
+/**
+ * One-shot CLI script: enables the pgvector extension before drizzle-kit
+ * push/migrate runs. Scripts are exempt from the no-console rule that
+ * applies to long-running server code; we still prefer stdout/stderr
+ * directly so we don't pull in a logger dependency for a single-use tool.
+ */
 import pg from "pg";
 
 const { Pool } = pg;
@@ -12,8 +18,7 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query(`CREATE EXTENSION IF NOT EXISTS vector`);
-    // eslint-disable-next-line no-console
-    console.log("[setup-pgvector] vector extension ready");
+    process.stdout.write("[setup-pgvector] vector extension ready\n");
   } finally {
     client.release();
     await pool.end();
@@ -21,7 +26,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error("[setup-pgvector] failed", err);
+  process.stderr.write(`[setup-pgvector] failed: ${String(err)}\n`);
   process.exit(1);
 });
