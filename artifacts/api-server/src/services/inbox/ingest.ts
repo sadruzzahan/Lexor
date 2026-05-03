@@ -33,6 +33,44 @@ export interface IngestResult {
 
 export async function ingestEmail(input: IngestInput): Promise<IngestResult> {
   const firedAtMs = Date.now();
+
+  // Idempotency: the polling scheduler runs every 30s over a rolling
+  // 90s window, so the same Gmail message id can land here multiple
+  // times. Refuse to re-fire the alert + re-call the user. We dedupe
+  // on (userId, gmailMessageId). Test fixtures pass no id, so they
+  // are exempt — each test run is intentionally a fresh alert.
+  if (input.gmailMessageId) {
+    const [dup] = await db
+      .select({ id: inboxAlertsTable.id })
+      .from(inboxAlertsTable)
+      .where(
+        and(
+          eq(inboxAlertsTable.userId, input.userId),
+          eq(inboxAlertsTable.gmailMessageId, input.gmailMessageId),
+        ),
+      )
+      .limit(1);
+    if (dup) {
+      logger.debug(
+        { userId: input.userId, gmailMessageId: input.gmailMessageId },
+        "inbox ingest: duplicate gmail message — skipping",
+      );
+      return {
+        fired: false,
+        alertId: dup.id,
+        classification: {
+          category: null,
+          confidence: 0,
+          gist: "",
+          deadlineIso: null,
+          draftedReply: "",
+          matchedKeywords: [],
+        },
+        dispatch: null,
+      };
+    }
+  }
+
   const classification = await classifyEmail({
     fromDisplay: input.fromDisplay,
     subject: input.subject,

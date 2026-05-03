@@ -272,6 +272,49 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
             : { ok: false, error: "letter not ready" };
           break;
         }
+        case "send_email_reply": {
+          const alertId = String(args.alertId ?? "");
+          const confirmed = args.confirmedBySpeech === true;
+          if (!alertId) {
+            output = { error: "alertId required" };
+            break;
+          }
+          if (!confirmed) {
+            // Hard refusal — the assistant is required to get explicit
+            // verbal confirmation before sending. We never ship without
+            // a true flag, even if the LLM tries to bypass.
+            output = {
+              ok: false,
+              error: "verbal_confirmation_required",
+              saySorry:
+                "Tell the caller you need them to clearly say 'yes, send it' before you can send the reply.",
+            };
+            break;
+          }
+          try {
+            const { sendInboxAlertReply } = await import("../inbox/sendReply");
+            const r = await sendInboxAlertReply(alertId);
+            output = r;
+          } catch (err) {
+            output = { ok: false, error: err instanceof Error ? err.message : String(err) };
+          }
+          break;
+        }
+        case "open_case_on_device": {
+          const alertId = String(args.alertId ?? "");
+          if (!alertId || !callerPhone) {
+            output = { ok: false, error: "alertId and caller phone required" };
+            break;
+          }
+          try {
+            const { textAlertDeeplink } = await import("../inbox/sendReply");
+            const r = await textAlertDeeplink({ alertId, toPhone: callerPhone });
+            output = r;
+          } catch (err) {
+            output = { ok: false, error: err instanceof Error ? err.message : String(err) };
+          }
+          break;
+        }
         case "transfer_to_human": {
           output = {
             ok: false,
@@ -413,6 +456,36 @@ const TOOL_DEFINITIONS = [
       type: "object",
       properties: { caseId: { type: "string" } },
       required: ["caseId"],
+    },
+  },
+  {
+    type: "function",
+    name: "send_email_reply",
+    description:
+      "INBOX SENTINEL ONLY. Send the pre-drafted reply for a fired inbox alert via Gmail. REQUIRES the caller to have just verbally confirmed (e.g. they said 'send it'). Pass alertId from the preloaded alert context. Refuses if the alert is not in 'fired' or 'dispatched' state. Returns {ok, status} or {error}.",
+    parameters: {
+      type: "object",
+      properties: {
+        alertId: { type: "string", description: "Inbox alert id from session context." },
+        confirmedBySpeech: {
+          type: "boolean",
+          description: "Set true ONLY if the caller verbally confirmed; otherwise refuse.",
+        },
+      },
+      required: ["alertId", "confirmedBySpeech"],
+    },
+  },
+  {
+    type: "function",
+    name: "open_case_on_device",
+    description:
+      "INBOX SENTINEL ONLY. Text the caller a deeplink to open the alert (and any associated case) on their phone so they can review the drafted reply on screen. Use when the caller says 'review' instead of 'send'.",
+    parameters: {
+      type: "object",
+      properties: {
+        alertId: { type: "string", description: "Inbox alert id from session context." },
+      },
+      required: ["alertId"],
     },
   },
   {

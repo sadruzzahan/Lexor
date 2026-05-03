@@ -240,6 +240,15 @@ function ConnectionCard(props: {
           connected inbox.
         </div>
       )}
+      {enabled && (
+        <div className="mb-5 rounded-lg border border-border bg-bg/40 px-3 py-2 text-xs text-fg-muted">
+          Read-only access. {BRAND.name} only reads enough to classify each
+          message and never stores the original body. Click{" "}
+          <strong className="text-fg">Disable</strong> any time to immediately
+          stop polling — for a full revoke, also disconnect Gmail in the
+          Replit integrations panel.
+        </div>
+      )}
 
       <label className="block text-xs text-fg-muted mb-2">
         Your phone number (E.164 — e.g. +14155551234)
