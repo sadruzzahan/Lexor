@@ -1,6 +1,7 @@
 import { useDocumentTitle } from "@/lib/hooks";
 import { useT } from "@/lib/i18n";
 import { BRAND } from "@/lib/brand";
+import { RevealText } from "@/components/RevealText";
 
 export default function DisclaimerPage() {
   const { t } = useT();
@@ -13,7 +14,9 @@ export default function DisclaimerPage() {
       </h1>
 
       <div className="mt-8 space-y-4 text-base leading-relaxed text-fg-muted">
-        <p className="text-fg">{t("modal.body.lead")}</p>
+        <RevealText as="p" className="text-fg">
+          {t("modal.body.lead")}
+        </RevealText>
         <ol className="space-y-3 list-decimal list-inside">
           <li>
             <span className="font-semibold text-fg">{t("modal.body.p1.head")}</span>{" "}
@@ -28,7 +31,9 @@ export default function DisclaimerPage() {
             {t("modal.body.p3.text")}
           </li>
         </ol>
-        <p>{t("modal.body.tail")}</p>
+        <RevealText as="p" delay={0.15}>
+          {t("modal.body.tail")}
+        </RevealText>
       </div>
 
       <section
@@ -38,7 +43,9 @@ export default function DisclaimerPage() {
         <h2 className="font-display text-2xl font-semibold tracking-tight">
           {t("attorney.section.title")}
         </h2>
-        <p className="mt-3 text-fg-muted leading-relaxed">{t("attorney.section.body")}</p>
+        <RevealText as="p" className="mt-3 text-fg-muted leading-relaxed">
+          {t("attorney.section.body")}
+        </RevealText>
       </section>
     </article>
   );

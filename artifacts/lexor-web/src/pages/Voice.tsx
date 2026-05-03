@@ -4,6 +4,7 @@ import { PhoneCall, MessageCircle, Languages, ShieldAlert } from "lucide-react";
 import { useDocumentTitle } from "@/lib/hooks";
 import { getVoiceInfo, type VoiceInfo } from "@/lib/api";
 import { BRAND } from "@/lib/brand";
+import { RevealText } from "@/components/RevealText";
 
 export default function VoicePage() {
   useDocumentTitle(`Voice & WhatsApp · ${BRAND.name}`);
@@ -31,10 +32,12 @@ export default function VoicePage() {
         <h1 className="font-display text-4xl sm:text-6xl tracking-tight">
           Speak any language. <span className="text-accent">No screen needed.</span>
         </h1>
-        <p className="mt-4 text-lg text-fg-muted max-w-2xl mx-auto">
-          {BRAND.name} works by phone and on WhatsApp — for anyone with a $40 phone
-          and no time for paperwork. Free, real-time, in six languages.
-        </p>
+        <RevealText
+          as="p"
+          className="mt-4 text-lg text-fg-muted max-w-2xl mx-auto"
+        >
+          {`${BRAND.name} works by phone and on WhatsApp — for anyone with a $40 phone and no time for paperwork. Free, real-time, in six languages.`}
+        </RevealText>
       </header>
 
       <div className="grid md:grid-cols-2 gap-6">

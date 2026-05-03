@@ -1,7 +1,12 @@
 import { useEffect, useState } from "react";
 
 export function useReducedMotionPref(): boolean {
-  const [reduced, setReduced] = useState(false);
+  // Lazy-init from matchMedia so the very first render already reflects the
+  // user's preference — no animated frame leaks before the effect runs.
+  const [reduced, setReduced] = useState<boolean>(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return false;
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  });
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");

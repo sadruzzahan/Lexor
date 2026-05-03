@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useDocumentTitle } from "@/lib/hooks";
 import { BRAND } from "@/lib/brand";
+import { RevealText } from "@/components/RevealText";
 import {
   getInboxStatus,
   enableInboxWatch,
@@ -179,12 +180,9 @@ export default function SettingsPage() {
         <h1 className="font-display text-4xl sm:text-5xl tracking-tight">
           Inbox Sentinel
         </h1>
-        <p className="mt-3 text-fg-muted max-w-2xl">
-          When something legally significant lands in your inbox — an eviction
-          notice, a court summons, a debt collector, an IRS notice, an
-          immigration action, a termination — {BRAND.name} interrupts you
-          within 60 seconds, reads the gist, and offers to send a reply.
-        </p>
+        <RevealText as="p" className="mt-3 text-fg-muted max-w-2xl">
+          {`When something legally significant lands in your inbox — an eviction notice, a court summons, a debt collector, an IRS notice, an immigration action, a termination — ${BRAND.name} interrupts you within 60 seconds, reads the gist, and offers to send a reply.`}
+        </RevealText>
       </header>
 
       <ConnectionCard

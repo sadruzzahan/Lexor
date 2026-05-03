@@ -42,6 +42,23 @@ function shouldPrompt(ack: Ack | null, lastActive: number | null): boolean {
   return Date.now() - lastActive > SEVEN_DAYS_MS;
 }
 
+/**
+ * Dev-only escape hatch for screenshot capture. When `?ack=1` is in the URL
+ * AND we're in a Vite dev build, pre-seed the disclaimer ack so the modal
+ * does not block the capture. Stripped from production bundles.
+ */
+function maybeAutoAckForDev(): void {
+  if (typeof window === "undefined") return;
+  if (!import.meta.env.DEV) return;
+  if (!/[?&]ack=1\b/.test(window.location.search)) return;
+  const now = Date.now();
+  const ack: Ack = { acknowledgedAt: now, version: VERSION };
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ack));
+  writeLastActive(now);
+}
+
+maybeAutoAckForDev();
+
 interface DisclaimerState {
   open: boolean;
   acknowledge: () => void;

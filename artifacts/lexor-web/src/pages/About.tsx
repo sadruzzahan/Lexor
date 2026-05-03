@@ -1,6 +1,7 @@
 import { useDocumentTitle } from "@/lib/hooks";
 import { useT } from "@/lib/i18n";
 import { BRAND } from "@/lib/brand";
+import { RevealText } from "@/components/RevealText";
 
 export default function About() {
   const { t } = useT();
@@ -10,8 +11,12 @@ export default function About() {
       <h1 className="font-display text-4xl sm:text-5xl font-semibold tracking-tight">
         {t("page.about.title")}
       </h1>
-      <p className="mt-6 text-lg text-fg-muted leading-relaxed">{t("about.lead")}</p>
-      <p className="mt-4 text-fg-muted leading-relaxed">{t("about.body")}</p>
+      <RevealText as="p" className="mt-6 text-lg text-fg-muted leading-relaxed">
+        {t("about.lead")}
+      </RevealText>
+      <RevealText as="p" className="mt-4 text-fg-muted leading-relaxed" delay={0.1}>
+        {t("about.body")}
+      </RevealText>
       <p className="mt-10 text-xs text-fg-subtle font-mono">
         {BRAND.name.toLowerCase()} · {BRAND.parent}
       </p>
