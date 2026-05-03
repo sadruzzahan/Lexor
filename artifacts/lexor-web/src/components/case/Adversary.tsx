@@ -46,7 +46,7 @@ export function Adversary({ row }: { row: CaseRow }) {
     return () => {
       alive = false;
     };
-  }, [row.adversaryEntityId]);
+  }, [row.adversaryEntityId, row.id]);
 
   if (!row.adversaryEntityId) {
     return (

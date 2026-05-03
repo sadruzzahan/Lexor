@@ -4,6 +4,9 @@ import { buildDossier, searchEntities } from "../../services/adversary";
 
 const router: IRouter = Router();
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * GET /counsel/adversary/search?q=
  * Fuzzy lookup across the curated registry + persisted entities.
@@ -31,12 +34,12 @@ router.get(
   "/adversary/:entityId",
   async (req: Request, res: Response) => {
     const id = String(req.params.entityId ?? "");
-    if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
+    if (!UUID_RE.test(id)) {
       throw new HttpError(400, "invalid_input", "Invalid entityId.");
     }
     const excludeRaw = req.query.excludeCaseId;
     const excludeCaseId =
-      typeof excludeRaw === "string" && /^[0-9a-f-]{36}$/i.test(excludeRaw)
+      typeof excludeRaw === "string" && UUID_RE.test(excludeRaw)
         ? excludeRaw
         : undefined;
     const dossier = await buildDossier(id, { excludeCaseId });
