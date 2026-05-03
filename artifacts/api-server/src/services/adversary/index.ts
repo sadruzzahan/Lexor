@@ -110,16 +110,30 @@ export async function resolveAdversaryForCase(opts: {
     resolvedSource = synth?.litigationStats ? "ai_estimated" : "empty";
   }
 
+  // Conflict-safe: two pipelines resolving the same new entity name in
+  // parallel would both miss the SELECT and try to INSERT. The unique
+  // index on `normalized_name` would throw on the loser. `onConflictDoNothing`
+  // returns no row in that case; we then SELECT the winner and reuse it.
   const [created] = await db
     .insert(entitiesTable)
     .values(insertValues)
+    .onConflictDoNothing({ target: entitiesTable.normalizedName })
     .returning({ id: entitiesTable.id });
 
-  if (!created) {
+  if (created) {
+    return { entityId: created.id, source: resolvedSource };
+  }
+
+  const [winner] = await db
+    .select({ id: entitiesTable.id })
+    .from(entitiesTable)
+    .where(eq(entitiesTable.normalizedName, insertValues.normalizedName))
+    .limit(1);
+  if (!winner) {
     logger.warn({ name }, "adversary insert returned no row");
     return null;
   }
-  return { entityId: created.id, source: resolvedSource };
+  return { entityId: winner.id, source: "cached" };
 }
 
 /**
