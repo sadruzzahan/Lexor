@@ -94,6 +94,27 @@ export async function extractFromImage(opts: {
   return parseExtraction(message);
 }
 
+/**
+ * Extract structured fields from a PDF buffer. Uses pdf-parse to pull
+ * the underlying text first (real PDF text extraction — no UTF-8 hack)
+ * and then runs the same prompt as the text path. If the PDF is
+ * scan-only with no embedded text, we throw a clear error so the UI can
+ * tell the user to upload a photo of the page instead.
+ */
+export async function extractFromPdf(buf: Buffer): Promise<Extraction> {
+  const { PDFParse } = await import("pdf-parse");
+  const data = new Uint8Array(buf);
+  const parser = new PDFParse({ data });
+  const result = await parser.getText();
+  const text = (result.text ?? "").trim();
+  if (text.length < 40) {
+    throw new Error(
+      "This PDF has no extractable text — please upload a photo of the page instead.",
+    );
+  }
+  return extractFromText(text);
+}
+
 export async function extractFromText(text: string): Promise<Extraction> {
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-5",

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, ShieldAlert, X } from "lucide-react";
+import { ExternalLink, ShieldAlert, X, Download, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
 import type { CaseRow, RegulatorComplaint, Violation } from "@/lib/api";
 
 const SEVERITY_STYLE: Record<string, string> = {
@@ -94,6 +95,27 @@ function ComplaintModal({
   complaint: RegulatorComplaint;
   onClose: () => void;
 }) {
+  const [copied, setCopied] = useState(false);
+  function copyDraft() {
+    void navigator.clipboard.writeText(complaint.draftPlainText).then(() => {
+      setCopied(true);
+      toast.success("Complaint text copied");
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  function downloadPdf() {
+    const blob = new Blob([complaint.draftHtml], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, "_blank");
+    if (!w) {
+      toast.error("Pop-up blocked — allow pop-ups to download.");
+      return;
+    }
+    setTimeout(() => {
+      w.print();
+      URL.revokeObjectURL(url);
+    }, 400);
+  }
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -130,9 +152,11 @@ function ComplaintModal({
         </div>
 
         <div className="px-6 py-4 border-b border-border bg-warning/10 text-xs text-warning">
-          You are filing this complaint personally. Lexor is preparing the
-          document at your direction. Confirm the contents are accurate before
-          you submit, and consider consulting a licensed attorney first.
+          <strong>You are filing this complaint personally.</strong> Lexor is
+          preparing the document at your direction; we don't submit on your
+          behalf. Citations come from a curated, hand-verified statute corpus
+          (CA / TX / NY plus federal FDCPA + FLSA) — confirm the contents are
+          accurate and consider consulting a licensed attorney before you file.
         </div>
 
         <div className="px-6 py-5">
@@ -152,9 +176,25 @@ function ComplaintModal({
           </ol>
         </div>
 
-        <div className="sticky bottom-0 px-6 py-4 border-t border-border bg-bg-elevated flex items-center justify-end gap-3">
-          <button type="button" onClick={onClose} className="ghost-btn rounded-base px-4 py-2 text-sm">
+        <div className="sticky bottom-0 px-6 py-4 border-t border-border bg-bg-elevated flex items-center justify-end gap-2 flex-wrap">
+          <button type="button" onClick={onClose} className="ghost-btn rounded-base px-3 py-2 text-sm">
             Close
+          </button>
+          <button
+            type="button"
+            onClick={copyDraft}
+            className="ghost-btn rounded-base px-3 py-2 text-sm inline-flex items-center gap-2"
+          >
+            {copied ? <Check className="size-4 text-accent" /> : <Copy className="size-4" />}
+            Copy text
+          </button>
+          <button
+            type="button"
+            onClick={downloadPdf}
+            className="ghost-btn rounded-base px-3 py-2 text-sm inline-flex items-center gap-2"
+          >
+            <Download className="size-4" />
+            Download PDF
           </button>
           <a
             href={complaint.filingUrl}

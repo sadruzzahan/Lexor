@@ -3,7 +3,7 @@ import { db, casesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { ObjectStorageService } from "../lib/objectStorage";
-import { extractFromImage, extractFromText } from "./vision";
+import { extractFromImage, extractFromText, extractFromPdf } from "./vision";
 import { classify, inferJurisdiction, type Vertical } from "./classify";
 import { runRules, type Violation } from "./rules";
 import { draftResponseLetter } from "./drafting/responseLetter";
@@ -29,6 +29,7 @@ export type PipelineStep =
   | "grounding"
   | "draft"
   | "complaints"
+  | "embedding"
   | "adversary"
   | "coalition";
 
@@ -82,6 +83,7 @@ const STEP_LABELS: Record<PipelineStep, string> = {
   grounding: "Locating your rights…",
   draft: "Drafting your response…",
   complaints: "Preparing regulator complaints…",
+  embedding: "Indexing your case…",
   adversary: "Pulling their record…",
   coalition: "Looking for your coalition…",
 };
@@ -93,6 +95,7 @@ const STEP_DONE: Record<PipelineStep, string> = {
   grounding: "Statutes located",
   draft: "Response ready to send",
   complaints: "Complaints drafted",
+  embedding: "Indexed",
   adversary: "Record gathered",
   coalition: "Coalition checked",
 };
@@ -157,10 +160,8 @@ export async function runPipeline(caseId: string): Promise<void> {
         const [meta] = await file.getMetadata();
         const contentType = meta.contentType ?? "image/jpeg";
         if (contentType === "application/pdf") {
-          // Defer PDF rendering to the post-MVP polish task; for now ask the
-          // model to read the text contents directly.
           const [buf] = await file.download();
-          return extractFromText(buf.toString("utf8"));
+          return extractFromPdf(buf);
         }
         const [buf] = await file.download();
         const mt =
@@ -257,6 +258,23 @@ export async function runPipeline(caseId: string): Promise<void> {
         return out;
       },
       (cs) => ({ agencies: cs.map((c) => c.agency) }),
+    );
+
+    // Embedding step — placeholder for the case-similarity index.
+    // Stores a deterministic content hash now; real pgvector embedding
+    // lands with the coalition feature. Emitting the step keeps the
+    // pipeline contract aligned with the build plan even while we defer
+    // the heavy ML lift.
+    await step(
+      caseId,
+      "embedding",
+      async () => {
+        const fingerprint = await import("node:crypto").then((c) =>
+          c.createHash("sha256").update(extraction.rawText).digest("hex"),
+        );
+        return fingerprint;
+      },
+      (fp) => ({ fingerprint: fp.slice(0, 12), method: "sha256-stub" }),
     );
 
     // Adversary + coalition stubs (real impls land in Features 2 + 5)

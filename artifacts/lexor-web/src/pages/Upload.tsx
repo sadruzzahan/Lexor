@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { FileText } from "lucide-react";
 import { DropZone } from "@/components/upload/DropZone";
 import { PipelineReveal } from "@/components/upload/PipelineReveal";
 import { useEventStream } from "@/lib/sse";
@@ -123,23 +124,67 @@ export default function UploadPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4 }}
+          className="grid md:grid-cols-[260px_1fr] gap-6"
         >
-          <div className="text-xs uppercase tracking-wider text-fg-subtle mb-3">
-            Pipeline · {caseId.slice(0, 8)}
+          <ScannedFrame />
+          <div>
+            <div className="text-xs uppercase tracking-wider text-fg-subtle mb-3">
+              Pipeline · {caseId.slice(0, 8)}
+            </div>
+            <PipelineReveal events={events} />
           </div>
-          <PipelineReveal events={events} />
           {isComplete && (
             <div className="mt-6 text-center text-sm text-accent">
               Done — opening your case…
             </div>
           )}
           {error && (
-            <div className="mt-6 text-center text-sm text-violation">
+            <div className="mt-6 text-center text-sm text-violation md:col-span-2">
               {error}
             </div>
           )}
         </motion.div>
       )}
     </section>
+  );
+}
+
+/**
+ * Decorative "scanned page" frame shown next to the pipeline reveal.
+ * Pure CSS — no real preview of the uploaded file (we keep raw text out
+ * of the DOM). The intent is to give the user a visual anchor that says
+ * "your document is being read right now".
+ */
+function ScannedFrame() {
+  return (
+    <div className="relative isolate overflow-hidden rounded-lg2 border border-border-strong bg-white/5 aspect-[3/4] min-h-[280px]">
+      <div className="absolute inset-3 rounded-base bg-gradient-to-b from-white/[0.06] to-white/[0.02] border border-border p-4 flex flex-col gap-2">
+        <FileText className="size-5 text-fg-muted" aria-hidden />
+        <div className="h-2 w-3/4 rounded bg-fg/10" />
+        <div className="h-2 w-1/2 rounded bg-fg/10" />
+        <div className="mt-3 space-y-1.5" aria-hidden>
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-1.5 rounded bg-fg/10"
+              style={{ width: `${65 + ((i * 17) % 35)}%` }}
+            />
+          ))}
+        </div>
+      </div>
+      <motion.div
+        aria-hidden
+        className="absolute inset-x-0 h-[2px] pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, color-mix(in oklch, var(--color-accent) 80%, transparent), transparent)",
+          boxShadow:
+            "0 0 18px color-mix(in oklch, var(--color-accent) 50%, transparent)",
+        }}
+        initial={{ top: 0 }}
+        animate={{ top: ["0%", "100%", "0%"] }}
+        transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+      />
+    </div>
   );
 }

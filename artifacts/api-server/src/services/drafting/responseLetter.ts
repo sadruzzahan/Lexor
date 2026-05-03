@@ -2,7 +2,7 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 import type { Extraction } from "../vision";
 import type { Vertical } from "../classify";
 import type { Violation } from "../rules";
-import { stripUnverifiedCites, findStatutes } from "../grounding";
+import { stripUnverifiedCites, findStatutes, enforceCourtFilingPlaceholder } from "../grounding";
 
 export interface ResponseLetter {
   subject: string;
@@ -87,7 +87,8 @@ Draft the response letter now. JSON only.`;
     deliveryHints?: string[];
   };
 
-  const { cleaned: safeBody, stripped } = stripUnverifiedCites(json.body, verified);
+  const { cleaned: stripCleaned, stripped } = stripUnverifiedCites(json.body, verified);
+  const safeBody = enforceCourtFilingPlaceholder(stripCleaned);
 
   return {
     subject: json.subject,

@@ -2,7 +2,7 @@ import { anthropic } from "@workspace/integrations-anthropic-ai";
 import type { Extraction } from "../vision";
 import type { Violation, AgencyKind } from "../rules";
 import { AGENCY_LABEL, AGENCY_FILE_URL } from "../rules";
-import { stripUnverifiedCites, findStatutes } from "../grounding";
+import { stripUnverifiedCites, findStatutes, enforceCourtFilingPlaceholder } from "../grounding";
 
 export interface RegulatorComplaint {
   agency: AgencyKind;
@@ -73,7 +73,8 @@ Draft the complaint now. JSON only.`;
     steps?: string[];
   };
 
-  const { cleaned: safeBody, stripped } = stripUnverifiedCites(json.body, verified);
+  const { cleaned: stripCleaned, stripped } = stripUnverifiedCites(json.body, verified);
+  const safeBody = enforceCourtFilingPlaceholder(stripCleaned);
 
   return {
     agency: opts.agency,

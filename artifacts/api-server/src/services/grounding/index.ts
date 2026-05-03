@@ -24,6 +24,21 @@ const CITE_PATTERNS: RegExp[] = [
   /\b[A-Z][A-Za-z]+\s+v\.?\s+[A-Z][A-Za-z]+,\s*\d+\s+[A-Z][A-Za-z.]+\s+\d+(\s*\(\d{4}\))?/g,
 ];
 
+/**
+ * Court-motion guardrail. Build plan §10.4 requires that any output
+ * which would be filed with a court (motion, demurrer, answer) include
+ * a `[CONSULT ATTORNEY]` placeholder so the user is forced to confirm
+ * before submitting to a judge. We detect motion-shaped language and
+ * inject the placeholder if the model forgot it.
+ */
+const MOTION_RE =
+  /\b(motion to (quash|dismiss|stay|compel)|demurrer|answer to complaint|petition to)\b/i;
+export function enforceCourtFilingPlaceholder(text: string): string {
+  if (!MOTION_RE.test(text)) return text;
+  if (/\[CONSULT ATTORNEY\]/i.test(text)) return text;
+  return `${text.trimEnd()}\n\n[CONSULT ATTORNEY] — This document would be filed with a court. Have a licensed attorney review before you sign or file.`;
+}
+
 export function stripUnverifiedCites(
   text: string,
   verified: Statute[],

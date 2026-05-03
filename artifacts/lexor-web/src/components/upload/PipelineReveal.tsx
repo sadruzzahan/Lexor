@@ -9,6 +9,7 @@ const STEP_LABEL: Record<string, string> = {
   grounding: "Locating your rights",
   draft: "Drafting your response",
   complaints: "Preparing regulator complaints",
+  embedding: "Indexing your case",
   adversary: "Pulling their record",
   coalition: "Looking for your coalition",
 };
@@ -20,6 +21,7 @@ const STEP_ORDER = [
   "grounding",
   "draft",
   "complaints",
+  "embedding",
   "adversary",
   "coalition",
 ];
