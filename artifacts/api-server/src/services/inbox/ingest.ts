@@ -92,7 +92,10 @@ export async function ingestEmail(input: IngestInput): Promise<IngestResult> {
       },
       "inbox ingest: not significant",
     );
-    return { fired: true, alertId: null, classification, dispatch: null };
+    // Not significant — no alert created. Returning `fired:false` so
+    // downstream metrics (and the acceptance harness) treat this as a
+    // correct non-fire instead of a fire-with-null-alert.
+    return { fired: false, alertId: null, classification, dispatch: null };
   }
 
   const [watch] = await db
