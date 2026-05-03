@@ -12,6 +12,8 @@ import {
   finalizeCase,
   createTextCase,
   eventStreamUrl,
+  getVoiceUploadToken,
+  completeVoiceUpload,
 } from "@/lib/api";
 import { useDocumentTitle } from "@/lib/hooks";
 
@@ -35,20 +37,22 @@ any reason for terminating your tenancy.
 
 — GREENWAY APARTMENTS LLC, Owner`;
 
-async function sha256Hex(s: string): Promise<string> {
-  const buf = new TextEncoder().encode(s);
-  const hash = await crypto.subtle.digest("SHA-256", buf);
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 export default function UploadPage() {
   useDocumentTitle("Upload — Lexor");
   const [, navigate] = useLocation();
   const [caseId, setCaseId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pageDrag, setPageDrag] = useState(false);
+  // If the user arrived from a mid-call SMS bridge ("#voice=<token>"),
+  // the upload feeds back into their active phone call instead of opening
+  // a fresh case page.
+  const [voiceToken, setVoiceToken] = useState<string | null>(null);
+  const [voiceDone, setVoiceDone] = useState(false);
+
+  useEffect(() => {
+    const m = /#voice=([a-f0-9]+)/i.exec(window.location.hash);
+    if (m && m[1]) setVoiceToken(m[1]);
+  }, []);
   const { events, isComplete, error } = useEventStream(
     caseId ? eventStreamUrl(caseId) : null,
   );
@@ -99,15 +103,25 @@ export default function UploadPage() {
   async function startWithFile(file: File) {
     setBusy(true);
     try {
+      const buf = await file.arrayBuffer();
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buf)))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+      // Voice-bridge path: upload feeds the in-flight phone call instead
+      // of opening a new browser case.
+      if (voiceToken) {
+        const t = await getVoiceUploadToken(voiceToken);
+        await uploadToPresignedUrl(t.uploadURL, file, file.type);
+        await completeVoiceUpload(voiceToken, t.objectPath, hash);
+        setVoiceDone(true);
+        setBusy(false);
+        return;
+      }
       const c = await createCase();
       if (!c.uploadURL || !c.objectPath) {
         throw new Error("Server did not return an upload URL — try again.");
       }
       await uploadToPresignedUrl(c.uploadURL, file, file.type);
-      const buf = await file.arrayBuffer();
-      const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buf)))
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
       await finalizeCase(c.caseId, c.objectPath, hash);
       setCaseId(c.caseId);
     } catch (err) {
@@ -150,7 +164,22 @@ export default function UploadPage() {
         </div>
       )}
 
-      {!caseId ? (
+      {voiceDone ? (
+        <div className="rounded-2xl border border-accent/40 bg-accent/5 p-8 text-center">
+          <div className="font-display text-2xl mb-2">Got it — return to your call.</div>
+          <p className="text-sm text-fg-muted">
+            We're analyzing the letter now. Lexor will read the response back to
+            you on the phone in under a minute.
+          </p>
+        </div>
+      ) : voiceToken && !caseId ? (
+        <>
+          <div className="mb-4 rounded-xl border border-accent/40 bg-accent/5 px-4 py-3 text-sm text-accent text-center">
+            Mid-call upload — snap or pick the photo of your letter, then go back to your phone.
+          </div>
+          <DropZone onFile={startWithFile} onText={startWithText} busy={busy} />
+        </>
+      ) : !caseId ? (
         <>
           <DropZone onFile={startWithFile} onText={startWithText} busy={busy} />
           <div className="mt-6 text-center text-xs text-fg-subtle">

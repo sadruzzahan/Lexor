@@ -267,6 +267,47 @@ export async function getMapEntityRollup(
   return r.json();
 }
 
+export interface VoiceInfo {
+  phoneNumber: string | null;
+  whatsappNumber: string | null;
+  languages: Array<{ code: string; label: string }>;
+  spokenDisclaimer: Record<string, string>;
+  configured: boolean;
+}
+
+export async function getVoiceInfo(): Promise<VoiceInfo> {
+  const r = await fetch(`${API}/voice/info`);
+  if (!r.ok) throw new Error(`getVoiceInfo failed: ${r.status}`);
+  return r.json();
+}
+
+export interface VoiceUploadToken {
+  caseId: string;
+  uploadURL: string;
+  objectPath: string;
+}
+
+export async function getVoiceUploadToken(
+  token: string,
+): Promise<VoiceUploadToken> {
+  const r = await fetch(`${API}/voice/upload-token/${token}`);
+  if (!r.ok) throw new Error(`getVoiceUploadToken failed: ${r.status}`);
+  return r.json();
+}
+
+export async function completeVoiceUpload(
+  token: string,
+  objectPath: string,
+  rawDocumentHash: string,
+): Promise<void> {
+  const r = await fetch(`${API}/voice/upload-token/${token}/complete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ objectPath, rawDocumentHash }),
+  });
+  if (!r.ok) throw new Error(`completeVoiceUpload failed: ${r.status}`);
+}
+
 export async function createTextCase(letterText: string): Promise<string> {
   const r = await fetch(`${API}/cases`, {
     method: "POST",

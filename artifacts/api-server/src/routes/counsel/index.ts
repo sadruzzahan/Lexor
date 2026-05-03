@@ -7,11 +7,9 @@ import regulatorsRouter from "./regulators";
 import adversaryRouter from "./adversary";
 import mapRouter from "./map";
 import devSeedRouter from "./devSeed";
-import {
-  coalitionsRouter,
-  voiceRouter,
-  whatsappRouter,
-} from "./stubs";
+import voiceRouter from "./voice";
+import whatsappRouter from "./whatsapp";
+import { coalitionsRouter } from "./stubs";
 
 const router: IRouter = Router();
 
@@ -20,13 +18,15 @@ router.use(diagnosticsRouter);
 router.use(casesRouter);
 router.use(disclosuresRouter);
 router.use(regulatorsRouter);
-
-// Stubs — full implementations land in their respective feature tasks.
 router.use(adversaryRouter);
 router.use(mapRouter);
 router.use(devSeedRouter);
-router.use(coalitionsRouter);
+
+// Voice + WhatsApp — Feature 4 wired through Twilio + OpenAI Realtime.
 router.use("/voice", voiceRouter);
 router.use("/whatsapp", whatsappRouter);
+
+// Coalitions still pending (Feature 5).
+router.use(coalitionsRouter);
 
 export default router;

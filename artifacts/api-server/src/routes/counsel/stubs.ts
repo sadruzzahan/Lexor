@@ -33,11 +33,4 @@ coalitionsRouter.post(
   notImplemented("Coalition lawyer bid"),
 );
 
-// Voice + WhatsApp routers are mounted under their own subpath in index.ts.
-export const voiceRouter: IRouter = Router();
-voiceRouter.post("/incoming", notImplemented("Voice incoming"));
-voiceRouter.get("/stream", notImplemented("Voice stream bridge"));
-
-export const whatsappRouter: IRouter = Router();
-whatsappRouter.post("/inbound", notImplemented("WhatsApp inbound"));
-whatsappRouter.get("/qrcode", notImplemented("WhatsApp QR code"));
+// Voice + WhatsApp now live in dedicated routers (see ./voice, ./whatsapp).

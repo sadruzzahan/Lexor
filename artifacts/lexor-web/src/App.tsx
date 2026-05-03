@@ -4,7 +4,6 @@ import { Toaster } from "sonner";
 import { useDisclaimer } from "@/lib/disclaimer";
 import {
   Users2,
-  PhoneCall,
   Scale,
 } from "lucide-react";
 import { I18nProvider } from "@/lib/i18n";
@@ -19,6 +18,7 @@ import CasePage from "@/pages/Case";
 import { Soon } from "@/pages/Soon";
 import EntityPage from "@/pages/Entity";
 import MapPage from "@/pages/Map";
+import VoicePage from "@/pages/Voice";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -32,9 +32,7 @@ function Router() {
         <Soon titleKey="page.coalition.title" Icon={Users2} />
       </Route>
       <Route path="/entity/:id" component={EntityPage} />
-      <Route path="/voice">
-        <Soon titleKey="page.voice.title" Icon={PhoneCall} />
-      </Route>
+      <Route path="/voice" component={VoicePage} />
       <Route path="/rights/:vertical">
         <Soon titleKey="page.rights.title" Icon={Scale} />
       </Route>
