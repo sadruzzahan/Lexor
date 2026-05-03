@@ -32,6 +32,8 @@ export const coalitionsTable = pgTable(
     caseCount: integer("case_count").notNull().default(0),
     status: coalitionStatus("status").notNull().default("forming"),
     classComplaintDraftHtml: text("class_complaint_draft_html"),
+    winningBidId: uuid("winning_bid_id"),
+    finalizedAt: timestamp("finalized_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

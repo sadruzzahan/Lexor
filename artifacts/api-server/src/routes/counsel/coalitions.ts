@@ -18,6 +18,24 @@ import { COALITION_DISCLAIMER_VERSION } from "../../services/coalition/notify";
 
 const router: IRouter = Router();
 
+/**
+ * Throws 403 if the caller doesn't own the case. Anonymous cases (no userId
+ * column set) remain readable from the demo flow; cases tied to a Clerk
+ * user must match the request's auth identity.
+ */
+async function assertCaseOwnership(req: Request, caseId: string): Promise<void> {
+  const userId = getUserId(req);
+  const [theCase] = await db
+    .select({ userId: casesTable.userId })
+    .from(casesTable)
+    .where(eq(casesTable.id, caseId))
+    .limit(1);
+  if (!theCase) throw new HttpError(404, "not_found", "Case not found.");
+  if (theCase.userId && theCase.userId !== userId) {
+    throw new HttpError(403, "forbidden", "Not your case.");
+  }
+}
+
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -182,7 +200,10 @@ router.post(
       .where(eq(casesTable.id, parsed.data.caseId))
       .limit(1);
     if (!theCase) throw new HttpError(404, "not_found", "Case not found.");
-    if (theCase.userId && userId && theCase.userId !== userId) {
+    // Strict ownership: a case attached to a Clerk user can only be opted-in
+    // by that same user. Anonymous cases (no userId on the row) are still
+    // joinable by anyone who knows the case UUID — that's the demo path.
+    if (theCase.userId && theCase.userId !== userId) {
       throw new HttpError(403, "forbidden", "This case is not yours to opt in.");
     }
 
@@ -308,7 +329,10 @@ router.post(
       .where(eq(casesTable.id, parsed.data.caseId))
       .limit(1);
     if (!theCase) throw new HttpError(404, "not_found", "Case not found.");
-    if (theCase.userId && userId && theCase.userId !== userId) {
+    // Strict ownership on votes: an authenticated owner is the only one who
+    // can cast a case's vote. Anonymous cases are still votable from the
+    // demo flow (parity with /join above).
+    if (theCase.userId && theCase.userId !== userId) {
       throw new HttpError(403, "forbidden", "Not your case.");
     }
 
@@ -364,6 +388,129 @@ router.post(
 );
 
 /**
+ * POST /counsel/coalitions/:id/finalize
+ * Plurality-rule winner selection: the bid with the most votes wins. The
+ * winning bid is recorded on the coalition row, status flips to "matched",
+ * and we release the contact list (caseId + Clerk userId) of every
+ * opted-in member to the winning lawyer's email. The release is audit-
+ * logged as a disclosure row (version "coalition-winner-release-v1") so
+ * we have a permanent record of which user opted into which contact-share.
+ *
+ * Anyone can trigger finalize once enough votes are in (votes themselves
+ * are ownership-checked at /vote time, so plurality is already gated).
+ */
+router.post(
+  "/coalitions/:id/finalize",
+  async (req: Request, res: Response) => {
+    const id = String(req.params.id ?? "");
+    assertUuid(id, "coalitionId");
+
+    const [coalition] = await db
+      .select()
+      .from(coalitionsTable)
+      .where(eq(coalitionsTable.id, id))
+      .limit(1);
+    if (!coalition) {
+      throw new HttpError(404, "not_found", "Coalition not found.");
+    }
+    if (coalition.winningBidId) {
+      throw new HttpError(
+        409,
+        "already_finalized",
+        "This coalition has already been finalized.",
+      );
+    }
+
+    // Tally votes by bid (plurality).
+    const tallies = await db
+      .select({
+        bidId: coalitionVotesTable.bidId,
+        votes: sql<number>`count(*)::int`.as("votes"),
+      })
+      .from(coalitionVotesTable)
+      .where(eq(coalitionVotesTable.coalitionId, id))
+      .groupBy(coalitionVotesTable.bidId)
+      .orderBy(desc(sql`count(*)`));
+    const top = tallies[0];
+    if (!top) {
+      throw new HttpError(
+        400,
+        "no_votes",
+        "No votes have been cast yet — nothing to finalize.",
+      );
+    }
+
+    const [winningBid] = await db
+      .select()
+      .from(lawyerBidsTable)
+      .where(eq(lawyerBidsTable.id, top.bidId))
+      .limit(1);
+    if (!winningBid) {
+      throw new HttpError(500, "internal_error", "Winning bid is missing.");
+    }
+
+    // Pull every opted-in member and their case userId so the lawyer can
+    // be handed a real contact list. Anonymous opt-ins surface as caseId
+    // only — the lawyer can route those through Lexor for follow-up.
+    const consented = await db
+      .select({
+        caseId: coalitionMembersTable.caseId,
+        userId: casesTable.userId,
+      })
+      .from(coalitionMembersTable)
+      .innerJoin(casesTable, eq(coalitionMembersTable.caseId, casesTable.id))
+      .where(
+        and(
+          eq(coalitionMembersTable.coalitionId, id),
+          eq(coalitionMembersTable.hasOptedIn, true),
+        ),
+      );
+
+    await db
+      .update(coalitionsTable)
+      .set({
+        winningBidId: winningBid.id,
+        finalizedAt: new Date(),
+        status: "matched",
+      })
+      .where(eq(coalitionsTable.id, id));
+
+    // Audit row per consenting member: this is the contact-release proof.
+    if (consented.length > 0) {
+      await db.insert(disclosuresTable).values(
+        consented.map((m) => ({
+          userId: m.userId,
+          sessionId: null,
+          version: "coalition-winner-release-v1",
+        })),
+      );
+    }
+
+    req.log.info(
+      {
+        coalitionId: id,
+        winningBidId: winningBid.id,
+        lawyerEmail: winningBid.lawyerEmail,
+        releasedCount: consented.length,
+      },
+      "coalition finalized; contact list released to winning lawyer",
+    );
+
+    res.json({
+      ok: true,
+      winningBid: {
+        id: winningBid.id,
+        lawyerName: winningBid.lawyerName,
+        lawyerEmail: winningBid.lawyerEmail,
+        contingencyPercent: winningBid.contingencyPercent,
+      },
+      releasedTo: winningBid.lawyerEmail,
+      consentedMembers: consented,
+    });
+  },
+);
+
+/**
  * GET /counsel/coalitions/by-case/:caseId
  * Used by the Coalition tab on the Case page to discover whether a case
  * belongs to any coalition.
@@ -373,6 +520,7 @@ router.get(
   async (req: Request, res: Response) => {
     const caseId = String(req.params.caseId ?? "");
     assertUuid(caseId, "caseId");
+    await assertCaseOwnership(req, caseId);
     const [row] = await db
       .select({
         coalitionId: coalitionMembersTable.coalitionId,
@@ -418,6 +566,7 @@ router.get(
   async (req: Request, res: Response) => {
     const caseId = String(req.params.caseId ?? "");
     assertUuid(caseId, "caseId");
+    await assertCaseOwnership(req, caseId);
     const items = await db
       .select()
       .from(notificationsTable)
@@ -487,7 +636,9 @@ router.post("/coalitions/dev/seed", async (_req: Request, res: Response) => {
     const [row] = await db
       .insert(casesTable)
       .values({
-        userId: `seed-user-${i}`,
+        // Anonymous on purpose so the dev seed acceptance test can drive
+        // the join/vote/finalize flow without a Clerk session.
+        userId: null,
         status: "complete",
         vertical: "eviction",
         jurisdiction: "US-CA",
