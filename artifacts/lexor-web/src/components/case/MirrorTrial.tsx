@@ -327,8 +327,11 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
     );
   }
 
-  // No trial yet — call to action.
+  // No trial yet — call to action. The "Begin" button is gated until
+  // the upstream case pipeline finishes so we never produce an avoidable
+  // 409 toast loop on a still-parsing case.
   if (!trial) {
+    const caseReady = row.status === "complete";
     return (
       <div className="rounded-lg2 border border-dashed border-border-strong bg-bg-elevated/40 p-10 text-center">
         <Gavel className="size-9 text-fg-muted mx-auto" aria-hidden />
@@ -341,12 +344,16 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
         <button
           type="button"
           onClick={() => void startTrial(false)}
-          disabled={running}
-          className="shimmer-btn rounded-base px-5 py-2.5 mt-5 text-sm font-medium inline-flex items-center gap-2 disabled:opacity-60"
+          disabled={running || !caseReady}
+          className="shimmer-btn rounded-base px-5 py-2.5 mt-5 text-sm font-medium inline-flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {running ? (
             <>
               <Loader2 className="size-4 animate-spin" /> Hearing in session…
+            </>
+          ) : !caseReady ? (
+            <>
+              <Loader2 className="size-4 animate-spin" /> Waiting for case to finish…
             </>
           ) : (
             <>
@@ -355,7 +362,9 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
           )}
         </button>
         <p className="text-[10px] text-fg-subtle mt-4 max-w-md mx-auto">
-          Typically completes in under 45 seconds.
+          {caseReady
+            ? "Typically completes in under 45 seconds."
+            : "The hearing unlocks once the case pipeline finishes."}
         </p>
       </div>
     );

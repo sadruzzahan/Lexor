@@ -24,9 +24,12 @@ async function assertCaseAccess(
     .from(casesTable)
     .where(eq(casesTable.id, caseId))
     .limit(1);
+  // Match the rest of the case routes: 404 on either missing OR
+  // owner-mismatch so we never confirm the existence of someone else's
+  // case to a UUID-guesser.
   if (!theCase) throw new HttpError(404, "not_found", "Case not found.");
   if (theCase.userId && theCase.userId !== userId) {
-    throw new HttpError(403, "forbidden", "Not your case.");
+    throw new HttpError(404, "not_found", "Case not found.");
   }
 }
 

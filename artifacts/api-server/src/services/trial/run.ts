@@ -42,7 +42,9 @@ export async function runTrial(
     .limit(1);
   if (!theCase) throw new Error("case_not_found");
 
-  // Reuse a complete trial unless force.
+  // Reuse the most recent trial unless force. Both "complete" AND
+  // "running" rows are returned so two concurrent POSTs for the same
+  // case dedupe to a single token-spending run instead of fanning out.
   if (!opts.force) {
     const [existing] = await db
       .select()
@@ -50,7 +52,12 @@ export async function runTrial(
       .where(eq(trialsTable.caseId, caseId))
       .orderBy(desc(trialsTable.startedAt))
       .limit(1);
-    if (existing && existing.status === "complete") return existing.id;
+    if (
+      existing &&
+      (existing.status === "complete" || existing.status === "running")
+    ) {
+      return existing.id;
+    }
   }
 
   let opposingPartyName = "the opposing party";
