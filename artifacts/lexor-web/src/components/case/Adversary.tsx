@@ -277,13 +277,14 @@ export function DossierView({
         </section>
       )}
 
-      {dossier.otherCases.length > 1 && (
+      {dossier.otherCasesTotal >= 1 && (
         <section className="rounded-lg2 border border-accent/30 bg-accent/5 p-5">
           <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-accent">
             <Users2 className="size-3.5" /> Other people fighting them
           </div>
           <p className="mt-2 text-sm text-fg-muted">
-            {dossier.otherCases.length} other Lexor users have uploaded a
+            {dossier.otherCasesTotal} other Lexor user
+            {dossier.otherCasesTotal === 1 ? " has" : "s have"} uploaded a
             letter from this entity. A coalition forms automatically once
             5+ cases hit the same adversary — you're stronger together.
           </p>
@@ -312,9 +313,9 @@ export function DossierView({
               <ArrowUpRight className="size-3.5" />
             </Link>
             <span className="text-xs text-fg-subtle">
-              {dossier.otherCases.length >= 5
+              {dossier.otherCasesTotal >= 5
                 ? "Threshold reached — coordinate joint action."
-                : `${5 - dossier.otherCases.length} more cases until automatic activation.`}
+                : `${5 - dossier.otherCasesTotal} more case${5 - dossier.otherCasesTotal === 1 ? "" : "s"} until automatic activation.`}
             </span>
           </div>
         </section>

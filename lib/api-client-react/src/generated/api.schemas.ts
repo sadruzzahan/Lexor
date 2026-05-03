@@ -298,6 +298,11 @@ adversary. Intentionally omits any per-case identifier to avoid
 leaking cross-user case participation.
  */
   otherCases: AdversaryDossierOtherCasesItem[];
+  /** Total count of other cases against this adversary (after applying
+excludeCaseId, if any). The `otherCases` array is capped at 8;
+this field is the honest unbounded count.
+ */
+  otherCasesTotal: number;
   source: AdversaryDossierSource;
   sourceNote: string;
   lastRefreshedAt?: string | null;

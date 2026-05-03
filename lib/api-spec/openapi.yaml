@@ -626,6 +626,7 @@ components:
         - defensesThatWorked
         - timeline
         - otherCases
+        - otherCasesTotal
         - source
         - sourceNote
       properties:
@@ -703,6 +704,12 @@ components:
               vertical: { $ref: "#/components/schemas/CaseVertical" }
               jurisdiction: { type: string, nullable: true }
               createdAt: { type: string, format: date-time }
+        otherCasesTotal:
+          type: integer
+          description: |
+            Total count of other cases against this adversary (after applying
+            excludeCaseId, if any). The `otherCases` array is capped at 8;
+            this field is the honest unbounded count.
         source:
           type: string
           enum: [curated, ai_estimated, empty]

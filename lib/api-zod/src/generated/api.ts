@@ -280,6 +280,11 @@ export const GetAdversaryResponse = zod.object({
     .describe(
       "Anonymized aggregate of other Lexor cases against the same\nadversary. Intentionally omits any per-case identifier to avoid\nleaking cross-user case participation.\n",
     ),
+  otherCasesTotal: zod
+    .number()
+    .describe(
+      "Total count of other cases against this adversary (after applying\nexcludeCaseId, if any). The `otherCases` array is capped at 8;\nthis field is the honest unbounded count.\n",
+    ),
   source: zod.enum(["curated", "ai_estimated", "empty"]),
   sourceNote: zod.string(),
   lastRefreshedAt: zod.coerce.date().nullish(),

@@ -237,6 +237,11 @@ export async function buildDossier(
     .orderBy(desc(casesTable.createdAt))
     .limit(8);
 
+  const [{ total: otherCasesTotal }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(casesTable)
+    .where(otherWhere);
+
   const stats = (row.litigationStats ??
     curated?.litigationStats ?? {
       totalCases: 0,
@@ -264,6 +269,7 @@ export async function buildDossier(
       jurisdiction: o.jurisdiction,
       createdAt: o.createdAt.toISOString(),
     })),
+    otherCasesTotal,
     source: curated
       ? "curated"
       : row.litigationStats

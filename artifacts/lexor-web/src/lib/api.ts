@@ -123,6 +123,7 @@ export interface AdversaryDossier {
   defensesThatWorked: DossierDefense[];
   timeline: DossierTimelineEvent[];
   otherCases: DossierOtherCase[];
+  otherCasesTotal: number;
   source: "curated" | "ai_estimated" | "empty";
   sourceNote: string;
   lastRefreshedAt: string | null;
