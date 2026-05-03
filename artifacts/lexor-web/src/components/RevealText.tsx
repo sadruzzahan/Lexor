@@ -1,4 +1,4 @@
-import { Children, isValidElement, cloneElement, type ReactElement, type ReactNode } from "react";
+import { isValidElement, type ReactNode } from "react";
 import { motion } from "framer-motion";
 import { useReducedMotionPref } from "@/lib/hooks";
 
@@ -77,34 +77,3 @@ export function RevealText(props: RevealTextProps) {
     </Tag>
   );
 }
-
-/**
- * Wrap a child element (e.g. <p>, <h2>) in a RevealText without changing its
- * visual layout. Reads the textContent for the animation pass.
- */
-export function Reveal({
-  children,
-  delay,
-  stagger,
-}: {
-  children: ReactElement<{ className?: string; children?: ReactNode }>;
-  delay?: number;
-  stagger?: number;
-}) {
-  if (!isValidElement(children)) return <>{children}</>;
-  const tag = (children.type as string) as AsTag;
-  return (
-    <RevealText
-      as={tag}
-      className={children.props.className}
-      delay={delay}
-      stagger={stagger}
-    >
-      {children.props.children ?? null}
-    </RevealText>
-  );
-}
-
-// Avoid unused-import lint
-void Children;
-void cloneElement;
