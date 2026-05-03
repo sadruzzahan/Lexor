@@ -5,7 +5,8 @@
  * Lexor / zexorex API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { Entity } from "./entity";
 
-export interface HealthStatus {
-  status: string;
+export interface EntitySearchResponse {
+  results: Entity[];
 }

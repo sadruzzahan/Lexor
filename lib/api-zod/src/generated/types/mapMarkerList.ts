@@ -5,7 +5,8 @@
  * Lexor / zexorex API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { MapMarker } from "./mapMarker";
 
-export interface HealthStatus {
-  status: string;
+export interface MapMarkerList {
+  markers: MapMarker[];
 }

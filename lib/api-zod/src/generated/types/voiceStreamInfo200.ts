@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
-}
+export type VoiceStreamInfo200 = {
+  protocol: string;
+  path: string;
+};

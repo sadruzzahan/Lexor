@@ -3,34 +3,677 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Lexor / zexorex API specification
 servers:
   - url: /api
     description: Base API path
+
 tags:
   - name: health
     description: Health operations
+  - name: storage
+    description: Object storage upload and serving endpoints
+  - name: counsel
+    description: Lexor consumer-counsel endpoints (cases, adversary, map, coalitions, regulators, voice, whatsapp)
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
           content:
             application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /counsel/healthz:
+    get:
+      operationId: counselHealthCheck
+      tags: [counsel]
+      summary: Counsel namespace health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HealthStatus" }
+
+  /counsel/_diagnostics:
+    get:
+      operationId: counselDiagnostics
+      tags: [counsel]
+      summary: Report which third-party API keys are configured (presence only — never values)
+      responses:
+        "200":
+          description: Diagnostics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CounselDiagnostics" }
+
+  /storage/uploads/request-url:
+    post:
+      tags: [storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned URL for file upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadUrlRequest" }
+      responses:
+        "200":
+          description: Presigned upload URL generated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadUrlResponse" }
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /counsel/cases:
+    post:
+      tags: [counsel]
+      operationId: createCase
+      summary: Create a new case (returns presigned upload URL + caseId)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCaseRequest" }
+      responses:
+        "200":
+          description: Case created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CreateCaseResult" }
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /counsel/cases/{id}/finalize:
+    patch:
+      tags: [counsel]
+      operationId: finalizeCase
+      summary: Mark upload complete and trigger pipeline
+      parameters:
+        - $ref: "#/components/parameters/CaseId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FinalizeCaseRequest" }
+      responses:
+        "200":
+          description: Finalized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Case" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /counsel/cases/{id}:
+    get:
+      tags: [counsel]
+      operationId: getCase
+      summary: Fetch a case
+      parameters:
+        - $ref: "#/components/parameters/CaseId"
+      responses:
+        "200":
+          description: Case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Case" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /counsel/cases/{id}/events:
+    get:
+      tags: [counsel]
+      operationId: streamCaseEvents
+      summary: SSE stream of pipeline events
+      parameters:
+        - $ref: "#/components/parameters/CaseId"
+      responses:
+        "200":
+          description: text/event-stream
+          content:
+            text/event-stream:
               schema:
-                $ref: "#/components/schemas/HealthStatus"
+                type: string
+
+  /counsel/disclosures/ack:
+    post:
+      tags: [counsel]
+      operationId: acknowledgeDisclosure
+      summary: Record that the user acknowledged the legal disclosure
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DisclosureAckRequest" }
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DisclosureAckResponse" }
+
+  /counsel/adversary/search:
+    get:
+      tags: [counsel]
+      operationId: searchAdversary
+      summary: Fuzzy lookup of adversary entities
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntitySearchResponse" }
+
+  /counsel/adversary/{entityId}:
+    get:
+      tags: [counsel]
+      operationId: getAdversary
+      summary: Full litigation dossier
+      parameters:
+        - in: path
+          name: entityId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Entity dossier
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Entity" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /counsel/map/markers:
+    get:
+      tags: [counsel]
+      operationId: getMapMarkers
+      summary: Public anonymized map markers
+      parameters:
+        - in: query
+          name: bbox
+          required: false
+          description: "minLng,minLat,maxLng,maxLat"
+          schema: { type: string }
+        - in: query
+          name: vertical
+          required: false
+          schema: { $ref: "#/components/schemas/CaseVertical" }
+      responses:
+        "200":
+          description: GeoJSON-ish marker list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapMarkerList" }
+
+  /counsel/map/entity/{id}:
+    get:
+      tags: [counsel]
+      operationId: getMapEntityRollup
+      summary: Per-entity rollup for the map sidesheet
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Rollup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Entity" }
+
+  /counsel/coalitions:
+    get:
+      tags: [counsel]
+      operationId: listCoalitions
+      summary: List open coalitions
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CoalitionList" }
+
+  /counsel/coalitions/{id}:
+    get:
+      tags: [counsel]
+      operationId: getCoalition
+      summary: Coalition detail
+      parameters:
+        - $ref: "#/components/parameters/CoalitionId"
+      responses:
+        "200":
+          description: Coalition
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Coalition" }
+
+  /counsel/coalitions/{id}/join:
+    post:
+      tags: [counsel]
+      operationId: joinCoalition
+      summary: Authenticated user joins a coalition
+      parameters:
+        - $ref: "#/components/parameters/CoalitionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CoalitionJoinRequest" }
+      responses:
+        "200":
+          description: Joined
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Coalition" }
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+
+  /counsel/coalitions/{id}/bid:
+    post:
+      tags: [counsel]
+      operationId: submitLawyerBid
+      summary: Lawyer submits a bid to represent a coalition
+      parameters:
+        - $ref: "#/components/parameters/CoalitionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LawyerBidRequest" }
+      responses:
+        "200":
+          description: Bid submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LawyerBid" }
+
+  /counsel/regulators/file:
+    post:
+      tags: [counsel]
+      operationId: fileRegulatorComplaint
+      summary: Submit a complaint draft to an agency
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegulatorFileRequest" }
+      responses:
+        "200":
+          description: Filed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RegulatorFileResponse" }
+
+  /counsel/voice/stream:
+    get:
+      tags: [counsel]
+      operationId: voiceStreamInfo
+      summary: Twilio Media Streams ↔ OpenAI Realtime bridge endpoint info
+      description: |
+        WebSocket bridge between Twilio Media Streams and OpenAI Realtime.
+        WebSocket upgrades are negotiated outside the OpenAPI surface; this
+        GET returns descriptor metadata for documentation/tooling.
+      responses:
+        "200":
+          description: Bridge info
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [protocol, path]
+                properties:
+                  protocol: { type: string }
+                  path: { type: string }
+
+  /counsel/voice/incoming:
+    post:
+      tags: [counsel]
+      operationId: voiceIncoming
+      summary: Twilio voice webhook (returns TwiML)
+      responses:
+        "200":
+          description: TwiML
+          content:
+            application/xml:
+              schema:
+                type: string
+
+  /counsel/whatsapp/inbound:
+    post:
+      tags: [counsel]
+      operationId: whatsappInbound
+      summary: Twilio WhatsApp inbound webhook
+      responses:
+        "200":
+          description: TwiML
+          content:
+            application/xml:
+              schema:
+                type: string
+
+  /counsel/whatsapp/qrcode:
+    get:
+      tags: [counsel]
+      operationId: whatsappQrCode
+      summary: Sandbox join QR code
+      responses:
+        "200":
+          description: PNG
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+
 components:
+  parameters:
+    CaseId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+    CoalitionId:
+      in: path
+      name: id
+      required: true
+      schema: { type: string, format: uuid }
+
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
 
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string, description: "Stable error code, e.g. 'rate_limited', 'not_found'" }
+            message: { type: string, description: "Humanized message safe to display" }
+            requestId: { type: string }
+
+    CounselDiagnostics:
+      type: object
+      required: [keys, integrations]
+      properties:
+        keys:
+          type: object
+          additionalProperties: { type: boolean }
+          description: "Map of secret name → presence (true/false). Values are never returned."
+        integrations:
+          type: object
+          additionalProperties: { type: boolean }
+
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: integer, minimum: 1 }
+        contentType: { type: string, minLength: 1 }
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string }
+        metadata: { $ref: "#/components/schemas/UploadUrlRequest" }
+
+    CaseVertical:
+      type: string
+      enum: [eviction, debt, wage, other]
+    CaseStatus:
+      type: string
+      enum: [queued, parsing, analyzing, drafting, complete, failed]
+    EntityKind:
+      type: string
+      enum: [landlord, employer, debt_collector, unknown]
+    CoalitionStatus:
+      type: string
+      enum: [forming, open, matched, closed]
+    SessionChannel:
+      type: string
+      enum: [voice, whatsapp]
+    RegulatorAgency:
+      type: string
+      enum: [HUD, CFPB, FTC, EEOC, STATE_AG]
+
+    CreateCaseRequest:
+      type: object
+      properties:
+        language: { type: string, default: "en" }
+        jurisdictionHint: { type: string, nullable: true }
+        contentType: { type: string, default: "application/pdf" }
+        fileName: { type: string, nullable: true }
+        fileSize: { type: integer, minimum: 1, nullable: true }
+    CreateCaseResult:
+      type: object
+      required: [caseId, uploadURL, objectPath]
+      properties:
+        caseId: { type: string, format: uuid }
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string }
+
+    FinalizeCaseRequest:
+      type: object
+      required: [objectPath]
+      properties:
+        objectPath: { type: string }
+        rawDocumentHash: { type: string, nullable: true }
+
+    Violation:
+      type: object
+      required: [code, description, severity]
+      properties:
+        code: { type: string }
+        statute: { type: string, nullable: true }
+        description: { type: string }
+        severity: { type: string, enum: [low, medium, high] }
+        citationUrl: { type: string, nullable: true }
+
+    Case:
+      type: object
+      required: [id, status, vertical, language, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: string, nullable: true }
+        status: { $ref: "#/components/schemas/CaseStatus" }
+        vertical: { $ref: "#/components/schemas/CaseVertical" }
+        jurisdiction: { type: string, nullable: true }
+        language: { type: string }
+        rawDocumentUrl: { type: string, nullable: true }
+        rawDocumentHash: { type: string, nullable: true }
+        parsed:
+          type: object
+          additionalProperties: true
+          nullable: true
+        violations:
+          type: array
+          items: { $ref: "#/components/schemas/Violation" }
+          nullable: true
+        responseLetter:
+          type: object
+          additionalProperties: true
+          nullable: true
+        regulatorComplaints:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          nullable: true
+        adversaryEntityId: { type: string, format: uuid, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    DisclosureAckRequest:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string }
+        sessionId: { type: string, nullable: true }
+    DisclosureAckResponse:
+      type: object
+      required: [ok, shownAt]
+      properties:
+        ok: { type: boolean }
+        shownAt: { type: string, format: date-time }
+
+    Entity:
+      type: object
+      required: [id, normalizedName, displayName, kind]
+      properties:
+        id: { type: string, format: uuid }
+        normalizedName: { type: string }
+        displayName: { type: string }
+        kind: { $ref: "#/components/schemas/EntityKind" }
+        jurisdictions:
+          type: array
+          items: { type: string }
+        registrationData:
+          type: object
+          additionalProperties: true
+          nullable: true
+        litigationStats:
+          type: object
+          additionalProperties: true
+          nullable: true
+        alternateNames:
+          type: array
+          items: { type: string }
+        pinCount: { type: integer }
+        lastRefreshedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+    EntitySearchResponse:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/Entity" }
+
+    MapMarker:
+      type: object
+      required: [id, entityId, caseVertical, coarseLat, coarseLng]
+      properties:
+        id: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        caseVertical: { $ref: "#/components/schemas/CaseVertical" }
+        violationCodes:
+          type: array
+          items: { type: string }
+        coarseLat: { type: number }
+        coarseLng: { type: number }
+        zipCode: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    MapMarkerList:
+      type: object
+      required: [markers]
+      properties:
+        markers:
+          type: array
+          items: { $ref: "#/components/schemas/MapMarker" }
+
+    Coalition:
+      type: object
+      required: [id, entityId, vertical, status, caseCount, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        entityId: { type: string, format: uuid }
+        vertical: { $ref: "#/components/schemas/CaseVertical" }
+        jurisdiction: { type: string, nullable: true }
+        letterTemplateHash: { type: string, nullable: true }
+        caseCount: { type: integer }
+        status: { $ref: "#/components/schemas/CoalitionStatus" }
+        classComplaintDraftHtml: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    CoalitionList:
+      type: object
+      required: [coalitions]
+      properties:
+        coalitions:
+          type: array
+          items: { $ref: "#/components/schemas/Coalition" }
+    CoalitionJoinRequest:
+      type: object
+      required: [caseId, hasOptedIn, disclosureVersion]
+      properties:
+        caseId: { type: string, format: uuid }
+        hasOptedIn: { type: boolean }
+        disclosureVersion: { type: string }
+
+    LawyerBidRequest:
+      type: object
+      required: [lawyerName, lawyerBarNumber, lawyerEmail, contingencyPercent]
+      properties:
+        lawyerName: { type: string, minLength: 1 }
+        lawyerBarNumber: { type: string, minLength: 1 }
+        lawyerEmail: { type: string, format: email }
+        lawyerFirm: { type: string, nullable: true }
+        contingencyPercent: { type: number, minimum: 0, maximum: 100 }
+        notes: { type: string, nullable: true }
+    LawyerBid:
+      allOf:
+        - $ref: "#/components/schemas/LawyerBidRequest"
+        - type: object
+          required: [id, coalitionId, createdAt]
+          properties:
+            id: { type: string, format: uuid }
+            coalitionId: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+
+    RegulatorFileRequest:
+      type: object
+      required: [caseId, agency, draftHtml]
+      properties:
+        caseId: { type: string, format: uuid }
+        agency: { $ref: "#/components/schemas/RegulatorAgency" }
+        draftHtml: { type: string, minLength: 1 }
+    RegulatorFileResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [submitted, prepared] }
+        filingUrl: { type: string, nullable: true }
+        downloadUrl: { type: string, nullable: true }
