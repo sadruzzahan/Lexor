@@ -199,6 +199,7 @@ Return ONLY JSON, no prose. If you cannot infer anything beyond the kind, return
  */
 export async function buildDossier(
   entityId: string,
+  opts: { excludeCaseId?: string } = {},
 ): Promise<AdversaryDossier | null> {
   const [row] = await db
     .select()
@@ -216,7 +217,15 @@ export async function buildDossier(
   // intentionally not the user id.
   // Privacy: omit case ids entirely. Only vertical / jurisdiction /
   // createdAt are exposed so the coalition CTA can render without leaking
-  // cross-user case-participation identifiers.
+  // cross-user case-participation identifiers. Also exclude the viewer's
+  // own case so "other people" copy and the coalition threshold count are
+  // honest.
+  const otherWhere = opts.excludeCaseId
+    ? and(
+        eq(casesTable.adversaryEntityId, entityId),
+        ne(casesTable.id, opts.excludeCaseId),
+      )
+    : eq(casesTable.adversaryEntityId, entityId);
   const others = await db
     .select({
       vertical: casesTable.vertical,
@@ -224,7 +233,7 @@ export async function buildDossier(
       createdAt: casesTable.createdAt,
     })
     .from(casesTable)
-    .where(eq(casesTable.adversaryEntityId, entityId))
+    .where(otherWhere)
     .orderBy(desc(casesTable.createdAt))
     .limit(8);
 

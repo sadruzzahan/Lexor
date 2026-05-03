@@ -34,7 +34,12 @@ router.get(
     if (!id || !/^[0-9a-f-]{36}$/i.test(id)) {
       throw new HttpError(400, "invalid_input", "Invalid entityId.");
     }
-    const dossier = await buildDossier(id);
+    const excludeRaw = req.query.excludeCaseId;
+    const excludeCaseId =
+      typeof excludeRaw === "string" && /^[0-9a-f-]{36}$/i.test(excludeRaw)
+        ? excludeRaw
+        : undefined;
+    const dossier = await buildDossier(id, { excludeCaseId });
     if (!dossier) throw new HttpError(404, "not_found", "Entity not found.");
     res.json(dossier);
   },

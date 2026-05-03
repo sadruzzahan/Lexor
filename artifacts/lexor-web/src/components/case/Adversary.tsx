@@ -39,7 +39,7 @@ export function Adversary({ row }: { row: CaseRow }) {
     let alive = true;
     setLoading(true);
     setError(null);
-    getAdversary(row.adversaryEntityId)
+    getAdversary(row.adversaryEntityId, { excludeCaseId: row.id })
       .then((d) => alive && setDossier(d))
       .catch((e: unknown) => alive && setError((e as Error).message))
       .finally(() => alive && setLoading(false));

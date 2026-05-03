@@ -128,8 +128,12 @@ export interface AdversaryDossier {
   lastRefreshedAt: string | null;
 }
 
-export async function getAdversary(entityId: string): Promise<AdversaryDossier> {
-  const r = await fetch(`${API}/adversary/${entityId}`);
+export async function getAdversary(
+  entityId: string,
+  opts: { excludeCaseId?: string } = {},
+): Promise<AdversaryDossier> {
+  const qs = opts.excludeCaseId ? `?excludeCaseId=${encodeURIComponent(opts.excludeCaseId)}` : "";
+  const r = await fetch(`${API}/adversary/${entityId}${qs}`);
   if (!r.ok) throw new Error(`getAdversary failed: ${r.status}`);
   return r.json();
 }
