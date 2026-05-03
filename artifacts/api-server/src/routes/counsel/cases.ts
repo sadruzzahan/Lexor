@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, casesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { ObjectStorageService } from "../../lib/objectStorage";
 import { rateLimit } from "../../middlewares/rateLimit";
 import { HttpError } from "../../middlewares/errorEnvelope";
@@ -104,13 +104,21 @@ router.patch(
         ? req.body.rawDocumentHash
         : null;
 
+    const callerUserId = getUserId(req);
     const [existing] = await db
       .select({ userId: casesTable.userId })
       .from(casesTable)
       .where(eq(casesTable.id, id))
       .limit(1);
     if (!existing) throw new HttpError(404, "not_found", "Case not found.");
-    assertCanAccess(existing, getUserId(req));
+    assertCanAccess(existing, callerUserId);
+
+    // Claim flow: an authenticated user finalizing a previously-anonymous
+    // case becomes its owner. Atomic via the WHERE clause — we only set
+    // userId when it is still NULL, so two concurrent claimants cannot
+    // race each other into co-ownership.
+    const claimUserId =
+      existing.userId === null && callerUserId !== null ? callerUserId : null;
 
     const [updated] = await db
       .update(casesTable)
@@ -119,8 +127,13 @@ router.patch(
         rawDocumentHash,
         status: "queued",
         updatedAt: new Date(),
+        ...(claimUserId ? { userId: claimUserId } : {}),
       })
-      .where(eq(casesTable.id, id))
+      .where(
+        claimUserId
+          ? sql`${casesTable.id} = ${id} AND ${casesTable.userId} IS NULL`
+          : eq(casesTable.id, id),
+      )
       .returning();
 
     if (!updated) throw new HttpError(404, "not_found", "Case not found.");
@@ -132,13 +145,35 @@ router.patch(
 
 router.get("/cases/:id", async (req: Request, res: Response) => {
   const id = parseCaseId(req);
+  const callerUserId = getUserId(req);
   const [row] = await db
     .select()
     .from(casesTable)
     .where(eq(casesTable.id, id))
     .limit(1);
   if (!row) throw new HttpError(404, "not_found", "Case not found.");
-  assertCanAccess(row, getUserId(req));
+  assertCanAccess(row, callerUserId);
+
+  // Claim-on-read: same atomic pattern as finalize. If the case is still
+  // anonymous and the caller is signed in, attach them as owner.
+  if (row.userId === null && callerUserId !== null) {
+    const [claimed] = await db
+      .update(casesTable)
+      .set({ userId: callerUserId, updatedAt: new Date() })
+      .where(
+        sql`${casesTable.id} = ${id} AND ${casesTable.userId} IS NULL`,
+      )
+      .returning();
+    if (claimed) {
+      req.log.info(
+        { caseId: id, userId: callerUserId },
+        "anonymous case claimed by user",
+      );
+      res.json(claimed);
+      return;
+    }
+  }
+
   res.json(row);
 });
 

@@ -9,6 +9,8 @@
   },
   "scripts": {
     "setup-pgvector": "tsx scripts/setup-pgvector.ts",
+    "generate": "drizzle-kit generate --config ./drizzle.config.ts",
+    "migrate": "pnpm run setup-pgvector && drizzle-kit migrate --config ./drizzle.config.ts",
     "push": "pnpm run setup-pgvector && drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "pnpm run setup-pgvector && drizzle-kit push --force --config ./drizzle.config.ts"
   },

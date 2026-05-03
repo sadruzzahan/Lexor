@@ -4,10 +4,7 @@ import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
 } from "@workspace/api-zod";
-import {
-  ObjectStorageService,
-  ObjectNotFoundError,
-} from "../lib/objectStorage";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { HttpError } from "../middlewares/errorEnvelope";
 import { requireAuth } from "../middlewares/auth";
 
@@ -96,41 +93,23 @@ router.get(
 
 /**
  * GET /storage/objects/*
- * Private object entities. Lexor's full ACL story (case-owner reads, signed
- * download URLs for anonymous-but-token-bearing callers) lands in Feature 1;
- * for the foundation we require an authenticated Clerk session so that
- * uploaded legal documents are not world-readable by URL guess.
+ * Private object entities. The foundation deliberately does NOT serve raw
+ * private objects — the safe per-case access pattern (case-owner check, or
+ * short-lived signed download URL minted from the case detail endpoint)
+ * lands with Feature 1. Returning 501 here closes the IDOR surface that a
+ * naive "isAuthenticated" gate would still leave open.
  */
 router.get(
   "/storage/objects/*path",
   requireAuth,
-  async (req: Request, res: Response, next) => {
-    try {
-      const raw = req.params.path;
-      const wildcardPath = Array.isArray(raw) ? raw.join("/") : raw;
-      const objectPath = `/objects/${wildcardPath}`;
-      const objectFile =
-        await objectStorageService.getObjectEntityFile(objectPath);
-
-      const response = await objectStorageService.downloadObject(objectFile);
-      res.status(response.status);
-      response.headers.forEach((value, key) => res.setHeader(key, value));
-
-      if (response.body) {
-        Readable.fromWeb(response.body as ReadableStream<Uint8Array>).pipe(res);
-      } else {
-        res.end();
-      }
-    } catch (err) {
-      if (err instanceof ObjectNotFoundError) {
-        next(new HttpError(404, "not_found", "Object not found."));
-        return;
-      }
-      req.log.error({ err }, "failed to serve object");
-      next(
-        new HttpError(500, "storage_error", "Could not serve the requested object."),
-      );
-    }
+  (_req: Request, _res: Response, next) => {
+    next(
+      new HttpError(
+        501,
+        "not_implemented",
+        "Private object reads must go through case-scoped signed URLs (Feature 1).",
+      ),
+    );
   },
 );
 

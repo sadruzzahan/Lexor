@@ -1,16 +1,14 @@
 import { Router, type IRouter } from "express";
+import { requireAuth } from "../../middlewares/auth";
 
 const router: IRouter = Router();
 
 /**
  * Reports whether each third-party API key is present in the environment.
- * Returns booleans only — never the values themselves.
- *
- * Internal-use endpoint. In production we should gate this behind a Clerk
- * "operator" role or an internal-only network path; for now it is read-only
- * and discloses no secrets.
+ * Returns booleans only — never the values themselves. Gated behind Clerk
+ * auth so the integration footprint isn't a public reconnaissance surface.
  */
-router.get("/_diagnostics", (_req, res) => {
+router.get("/_diagnostics", requireAuth, (_req, res) => {
   const keysToCheck = [
     // AI integrations (auto-provisioned via Replit AI Integrations)
     "AI_INTEGRATIONS_ANTHROPIC_BASE_URL",

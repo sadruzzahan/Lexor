@@ -17,8 +17,21 @@ router.post("/disclosures/ack", async (req: Request, res: Response) => {
     throw new HttpError(400, "invalid_input", "version is required");
   }
   const sessionId =
-    typeof req.body?.sessionId === "string" ? req.body.sessionId : null;
+    typeof req.body?.sessionId === "string" && req.body.sessionId.length > 0
+      ? req.body.sessionId
+      : null;
   const userId = getUserId(req);
+
+  // Every disclosure row must be attributable to *something* — an anonymous
+  // visitor's sessionId or an authenticated Clerk user. Refuse otherwise so
+  // the audit log is not polluted with un-attributable acks.
+  if (!userId && !sessionId) {
+    throw new HttpError(
+      400,
+      "invalid_input",
+      "sessionId is required for anonymous users.",
+    );
+  }
 
   const [row] = await db
     .insert(disclosuresTable)
