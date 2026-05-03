@@ -9,6 +9,7 @@ import {
   MapPin,
   ArrowLeft,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { useDocumentTitle } from "@/lib/hooks";
 import { getCase, type CaseRow } from "@/lib/api";
@@ -81,6 +82,54 @@ export default function CasePage() {
   }
 
   const isPending = row.status !== "complete" && row.status !== "failed";
+  const isFailed = row.status === "failed";
+
+  if (isFailed) {
+    return (
+      <section className="mx-auto max-w-2xl px-4 md:px-6 py-12">
+        <Link
+          href="/upload"
+          className="inline-flex items-center gap-1 text-xs text-fg-muted hover:text-fg mb-6"
+        >
+          <ArrowLeft className="size-3.5" /> New case
+        </Link>
+        <div className="rounded-xl2 border border-violation/40 bg-violation/5 p-8">
+          <div className="flex items-start gap-4">
+            <div className="rounded-full bg-violation/10 border border-violation/30 p-3 shrink-0">
+              <AlertTriangle className="size-6 text-violation" aria-hidden />
+            </div>
+            <div className="flex-1">
+              <h1 className="font-display text-2xl text-fg">
+                We couldn't finish reading this letter.
+              </h1>
+              <p className="mt-2 text-fg-muted text-sm">
+                Something went wrong while processing your document. Common
+                causes: the image was too blurry to read, the file wasn't a
+                supported format, or one of our backing services hiccupped.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="/upload"
+                  className="shimmer-btn rounded-base px-4 py-2 text-sm font-medium"
+                >
+                  Try again with a clearer copy
+                </Link>
+                <a
+                  href="mailto:help@lexor.app"
+                  className="rounded-base border border-border-strong px-4 py-2 text-sm text-fg-muted hover:text-fg"
+                >
+                  Email us your letter
+                </a>
+              </div>
+              <div className="mt-5 text-xs text-fg-subtle">
+                Case ref: {caseId.slice(0, 8)} · Status: {row.status}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-5xl px-4 md:px-6 py-8 md:py-12">

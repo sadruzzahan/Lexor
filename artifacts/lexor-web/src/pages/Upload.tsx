@@ -48,9 +48,41 @@ export default function UploadPage() {
   const [, navigate] = useLocation();
   const [caseId, setCaseId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pageDrag, setPageDrag] = useState(false);
   const { events, isComplete, error } = useEventStream(
     caseId ? eventStreamUrl(caseId) : null,
   );
+
+  // "Drop your letter anywhere on this screen" — wire drag/drop to the
+  // window so users don't have to aim for the dashed box. We swallow the
+  // default browser behavior (which would navigate to the file) on the
+  // whole document, and only run our handler when the case hasn't started.
+  useEffect(() => {
+    if (caseId) return;
+    function onOver(e: DragEvent) {
+      if (!e.dataTransfer?.types?.includes("Files")) return;
+      e.preventDefault();
+      setPageDrag(true);
+    }
+    function onLeave(e: DragEvent) {
+      if (e.relatedTarget === null) setPageDrag(false);
+    }
+    function onDrop(e: DragEvent) {
+      e.preventDefault();
+      setPageDrag(false);
+      const f = e.dataTransfer?.files?.[0];
+      if (f) void startWithFile(f);
+    }
+    window.addEventListener("dragover", onOver);
+    window.addEventListener("dragleave", onLeave);
+    window.addEventListener("drop", onDrop);
+    return () => {
+      window.removeEventListener("dragover", onOver);
+      window.removeEventListener("dragleave", onLeave);
+      window.removeEventListener("drop", onDrop);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caseId]);
 
   useEffect(() => {
     if (isComplete && caseId) {
@@ -106,6 +138,17 @@ export default function UploadPage() {
           draft your response — in about 30&nbsp;seconds.
         </p>
       </div>
+
+      {pageDrag && !caseId && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0 z-40 bg-accent/10 ring-4 ring-inset ring-accent/40 flex items-center justify-center backdrop-blur-sm"
+        >
+          <div className="rounded-xl2 bg-bg-elevated/90 border border-accent px-6 py-4 text-fg font-display text-xl shadow-2xl">
+            Release to scan your letter
+          </div>
+        </div>
+      )}
 
       {!caseId ? (
         <>
