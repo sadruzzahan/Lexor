@@ -232,6 +232,11 @@ paths:
       tags: [counsel]
       operationId: getMapMarkers
       summary: Public anonymized map markers
+      description: |
+        Returns one feature per coarse-grid cell. Cells are dropped
+        server-side when they contain fewer than 3 markers (k-anonymity)
+        unless the caller scopes the query to a specific `entityId`,
+        which is the case-page Map tab path.
       parameters:
         - in: query
           name: bbox
@@ -242,12 +247,39 @@ paths:
           name: vertical
           required: false
           schema: { $ref: "#/components/schemas/CaseVertical" }
+        - in: query
+          name: sinceDays
+          required: false
+          description: "Time window in days (1..1825)."
+          schema: { type: integer, minimum: 1, maximum: 1825 }
+        - in: query
+          name: violation
+          required: false
+          description: "Match markers whose violation_codes array contains this code."
+          schema: { type: string }
+        - in: query
+          name: entityId
+          required: false
+          description: "Scope to a single entity. Bypasses the ≥3 cell suppression."
+          schema: { type: string, format: uuid }
       responses:
         "200":
-          description: GeoJSON-ish marker list
+          description: Aggregated marker list
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapMarkerList" }
+
+  /counsel/map/stats:
+    get:
+      tags: [counsel]
+      operationId: getMapStats
+      summary: Predator Map ticker + leaderboard
+      responses:
+        "200":
+          description: Aggregate stats
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapStats" }
 
   /counsel/map/entity/{id}:
     get:
@@ -264,7 +296,17 @@ paths:
           description: Rollup
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Entity" }
+              schema: { $ref: "#/components/schemas/MapEntityRollup" }
+        "400":
+          description: Invalid id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 
   /counsel/coalitions:
     get:
@@ -729,10 +771,15 @@ components:
 
     MapMarker:
       type: object
-      required: [id, entityId, caseVertical, coarseLat, coarseLng]
+      description: |
+        Aggregated cell, not a row. `id` is a synthetic string of the form
+        `cell:{lat}:{lng}:{vertical}` so clients can use it as a stable
+        React key — it is **not** a database row id and never a UUID.
+      required:
+        [id, caseVertical, coarseLat, coarseLng, count, violationCodes]
       properties:
-        id: { type: string, format: uuid }
-        entityId: { type: string, format: uuid }
+        id: { type: string }
+        entityId: { type: string, format: uuid, nullable: true }
         caseVertical: { $ref: "#/components/schemas/CaseVertical" }
         violationCodes:
           type: array
@@ -740,7 +787,11 @@ components:
         coarseLat: { type: number }
         coarseLng: { type: number }
         zipCode: { type: string, nullable: true }
-        createdAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time, nullable: true }
+        count:
+          type: integer
+          minimum: 1
+          description: Number of underlying markers aggregated into this cell.
     MapMarkerList:
       type: object
       required: [markers]
@@ -748,6 +799,43 @@ components:
         markers:
           type: array
           items: { $ref: "#/components/schemas/MapMarker" }
+    MapStats:
+      type: object
+      required: [totalMarkers, weekMarkers, topEntities, byVertical]
+      properties:
+        totalMarkers: { type: integer }
+        weekMarkers: { type: integer }
+        topEntities:
+          type: array
+          items:
+            type: object
+            required: [entityId, displayName, pinCount, kind]
+            properties:
+              entityId: { type: string, format: uuid }
+              displayName: { type: string }
+              pinCount: { type: integer }
+              kind: { $ref: "#/components/schemas/EntityKind" }
+        byVertical:
+          type: array
+          items:
+            type: object
+            required: [vertical, count]
+            properties:
+              vertical: { $ref: "#/components/schemas/CaseVertical" }
+              count: { type: integer }
+    MapEntityRollup:
+      type: object
+      required: [id, displayName, kind, jurisdictions, pinCount, caseCount]
+      properties:
+        id: { type: string, format: uuid }
+        displayName: { type: string }
+        kind: { $ref: "#/components/schemas/EntityKind" }
+        jurisdictions:
+          type: array
+          items: { type: string }
+        pinCount: { type: integer }
+        caseCount: { type: integer }
+        topVertical: { type: string, nullable: true }
 
     Coalition:
       type: object

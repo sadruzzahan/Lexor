@@ -203,6 +203,68 @@ export function eventStreamUrl(caseId: string): string {
  * the case row and skips object storage. Used by the synthetic fixture
  * runner and by the "Try a sample" button on the upload page.
  */
+export interface MapMarkerCell {
+  id: string;
+  entityId: string;
+  caseVertical: string;
+  coarseLat: number;
+  coarseLng: number;
+  count: number;
+}
+
+export interface MapStats {
+  totalMarkers: number;
+  weekMarkers: number;
+  topEntities: Array<{
+    entityId: string;
+    displayName: string;
+    pinCount: number;
+    kind: EntityKind;
+  }>;
+  byVertical: Array<{ vertical: string; count: number }>;
+}
+
+export interface MapEntityRollup {
+  id: string;
+  displayName: string;
+  kind: EntityKind;
+  jurisdictions: string[];
+  pinCount: number;
+  caseCount: number;
+  topVertical: string | null;
+}
+
+export async function getMapMarkers(opts: {
+  vertical?: string | null;
+  sinceDays?: number | null;
+  bbox?: [number, number, number, number] | null;
+  entityId?: string | null;
+} = {}): Promise<MapMarkerCell[]> {
+  const qs = new URLSearchParams();
+  if (opts.vertical) qs.set("vertical", opts.vertical);
+  if (opts.sinceDays) qs.set("sinceDays", String(opts.sinceDays));
+  if (opts.bbox) qs.set("bbox", opts.bbox.join(","));
+  if (opts.entityId) qs.set("entityId", opts.entityId);
+  const r = await fetch(`${API}/map/markers?${qs}`);
+  if (!r.ok) throw new Error(`getMapMarkers failed: ${r.status}`);
+  const j = (await r.json()) as { markers: MapMarkerCell[] };
+  return j.markers;
+}
+
+export async function getMapStats(): Promise<MapStats> {
+  const r = await fetch(`${API}/map/stats`);
+  if (!r.ok) throw new Error(`getMapStats failed: ${r.status}`);
+  return r.json();
+}
+
+export async function getMapEntityRollup(
+  id: string,
+): Promise<MapEntityRollup> {
+  const r = await fetch(`${API}/map/entity/${id}`);
+  if (!r.ok) throw new Error(`getMapEntityRollup failed: ${r.status}`);
+  return r.json();
+}
+
 export async function createTextCase(letterText: string): Promise<string> {
   const r = await fetch(`${API}/cases`, {
     method: "POST",

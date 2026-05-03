@@ -302,24 +302,76 @@ export const GetAdversaryResponse = zod.object({
 });
 
 /**
+ * Returns one feature per coarse-grid cell. Cells are dropped
+server-side when they contain fewer than 3 markers (k-anonymity)
+unless the caller scopes the query to a specific `entityId`,
+which is the case-page Map tab path.
+
  * @summary Public anonymized map markers
  */
+export const getMapMarkersQuerySinceDaysMax = 1825;
+
 export const GetMapMarkersQueryParams = zod.object({
   bbox: zod.coerce.string().optional().describe("minLng,minLat,maxLng,maxLat"),
   vertical: zod.enum(["eviction", "debt", "wage", "other"]).optional(),
+  sinceDays: zod.coerce
+    .number()
+    .min(1)
+    .max(getMapMarkersQuerySinceDaysMax)
+    .optional()
+    .describe("Time window in days (1..1825)."),
+  violation: zod.coerce
+    .string()
+    .optional()
+    .describe("Match markers whose violation_codes array contains this code."),
+  entityId: zod.coerce
+    .string()
+    .uuid()
+    .optional()
+    .describe("Scope to a single entity. Bypasses the ≥3 cell suppression."),
 });
 
 export const GetMapMarkersResponse = zod.object({
   markers: zod.array(
+    zod
+      .object({
+        id: zod.string(),
+        entityId: zod.string().uuid().nullish(),
+        caseVertical: zod.enum(["eviction", "debt", "wage", "other"]),
+        violationCodes: zod.array(zod.string()),
+        coarseLat: zod.number(),
+        coarseLng: zod.number(),
+        zipCode: zod.string().nullish(),
+        createdAt: zod.coerce.date().nullish(),
+        count: zod
+          .number()
+          .min(1)
+          .describe("Number of underlying markers aggregated into this cell."),
+      })
+      .describe(
+        "Aggregated cell, not a row. `id` is a synthetic string of the form\n`cell:{lat}:{lng}:{vertical}` so clients can use it as a stable\nReact key — it is \*\*not\*\* a database row id and never a UUID.\n",
+      ),
+  ),
+});
+
+/**
+ * @summary Predator Map ticker + leaderboard
+ */
+export const GetMapStatsResponse = zod.object({
+  totalMarkers: zod.number(),
+  weekMarkers: zod.number(),
+  topEntities: zod.array(
     zod.object({
-      id: zod.string().uuid(),
       entityId: zod.string().uuid(),
-      caseVertical: zod.enum(["eviction", "debt", "wage", "other"]),
-      violationCodes: zod.array(zod.string()).optional(),
-      coarseLat: zod.number(),
-      coarseLng: zod.number(),
-      zipCode: zod.string().nullish(),
-      createdAt: zod.coerce.date().optional(),
+      displayName: zod.string(),
+      pinCount: zod.number(),
+      kind: zod.enum(["landlord", "employer", "debt_collector", "unknown"]),
+    }),
+  ),
+  byVertical: zod.array(
+    zod.object({
+      vertical: zod.enum(["eviction", "debt", "wage", "other"]),
+      count: zod.number(),
     }),
   ),
 });
@@ -333,16 +385,12 @@ export const GetMapEntityRollupParams = zod.object({
 
 export const GetMapEntityRollupResponse = zod.object({
   id: zod.string().uuid(),
-  normalizedName: zod.string(),
   displayName: zod.string(),
   kind: zod.enum(["landlord", "employer", "debt_collector", "unknown"]),
-  jurisdictions: zod.array(zod.string()).optional(),
-  registrationData: zod.record(zod.string(), zod.unknown()).nullish(),
-  litigationStats: zod.record(zod.string(), zod.unknown()).nullish(),
-  alternateNames: zod.array(zod.string()).optional(),
-  pinCount: zod.number().optional(),
-  lastRefreshedAt: zod.coerce.date().nullish(),
-  createdAt: zod.coerce.date().optional(),
+  jurisdictions: zod.array(zod.string()),
+  pinCount: zod.number(),
+  caseCount: zod.number(),
+  topVertical: zod.string().nullish(),
 });
 
 /**

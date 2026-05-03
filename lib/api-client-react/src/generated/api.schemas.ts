@@ -308,19 +308,59 @@ this field is the honest unbounded count.
   lastRefreshedAt?: string | null;
 }
 
+/**
+ * Aggregated cell, not a row. `id` is a synthetic string of the form
+`cell:{lat}:{lng}:{vertical}` so clients can use it as a stable
+React key — it is **not** a database row id and never a UUID.
+
+ */
 export interface MapMarker {
   id: string;
-  entityId: string;
+  entityId?: string | null;
   caseVertical: CaseVertical;
-  violationCodes?: string[];
+  violationCodes: string[];
   coarseLat: number;
   coarseLng: number;
   zipCode?: string | null;
-  createdAt?: string;
+  createdAt?: string | null;
+  /**
+   * Number of underlying markers aggregated into this cell.
+   * @minimum 1
+   */
+  count: number;
 }
 
 export interface MapMarkerList {
   markers: MapMarker[];
+}
+
+export type MapStatsTopEntitiesItem = {
+  entityId: string;
+  displayName: string;
+  pinCount: number;
+  kind: EntityKind;
+};
+
+export type MapStatsByVerticalItem = {
+  vertical: CaseVertical;
+  count: number;
+};
+
+export interface MapStats {
+  totalMarkers: number;
+  weekMarkers: number;
+  topEntities: MapStatsTopEntitiesItem[];
+  byVertical: MapStatsByVerticalItem[];
+}
+
+export interface MapEntityRollup {
+  id: string;
+  displayName: string;
+  kind: EntityKind;
+  jurisdictions: string[];
+  pinCount: number;
+  caseCount: number;
+  topVertical?: string | null;
 }
 
 export interface Coalition {
@@ -434,6 +474,20 @@ export type GetMapMarkersParams = {
    */
   bbox?: string;
   vertical?: CaseVertical;
+  /**
+   * Time window in days (1..1825).
+   * @minimum 1
+   * @maximum 1825
+   */
+  sinceDays?: number;
+  /**
+   * Match markers whose violation_codes array contains this code.
+   */
+  violation?: string;
+  /**
+   * Scope to a single entity. Bypasses the ≥3 cell suppression.
+   */
+  entityId?: string;
 };
 
 export type VoiceStreamInfo200 = {

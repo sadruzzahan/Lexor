@@ -7,13 +7,24 @@
  */
 import type { CaseVertical } from "./caseVertical";
 
+/**
+ * Aggregated cell, not a row. `id` is a synthetic string of the form
+`cell:{lat}:{lng}:{vertical}` so clients can use it as a stable
+React key — it is **not** a database row id and never a UUID.
+
+ */
 export interface MapMarker {
   id: string;
-  entityId: string;
+  entityId?: string | null;
   caseVertical: CaseVertical;
-  violationCodes?: string[];
+  violationCodes: string[];
   coarseLat: number;
   coarseLng: number;
   zipCode?: string | null;
-  createdAt?: Date;
+  createdAt?: Date | null;
+  /**
+   * Number of underlying markers aggregated into this cell.
+   * @minimum 1
+   */
+  count: number;
 }

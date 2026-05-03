@@ -11,6 +11,7 @@ import { draftRegulatorComplaint } from "./drafting/regulatorComplaint";
 import type { RegulatorComplaint } from "./drafting/regulatorComplaint";
 import type { ResponseLetter } from "./drafting/responseLetter";
 import { resolveAdversaryForCase } from "./adversary";
+import { recordMarkerForCase } from "./map";
 
 /**
  * Per-case event bus. SSE consumers subscribe via the events route; the
@@ -307,6 +308,16 @@ export async function runPipeline(caseId: string): Promise<void> {
           updatedAt: new Date(),
         })
         .where(eq(casesTable.id, caseId));
+
+      // Best-effort: drop one anonymized pin on the Predator Map. This
+      // never throws — see services/map/recordMarkerForCase.
+      await recordMarkerForCase({
+        caseId,
+        entityId: adversary.entityId,
+        vertical,
+        jurisdiction,
+        violationCodes: violations.map((v) => v.code),
+      });
     }
 
     // Coalition stub — real impl lands in Feature 5.

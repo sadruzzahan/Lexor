@@ -92,6 +92,10 @@
     box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent) 60%, transparent);
     animation: lexor-pulse 1.6s var(--ease-out-expo) infinite;
   }
+  @keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+  }
   @keyframes lexor-pulse {
     0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--color-accent) 60%, transparent); }
     70% { box-shadow: 0 0 0 8px color-mix(in oklch, var(--color-accent) 0%, transparent); }

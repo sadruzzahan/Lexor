@@ -20,10 +20,6 @@ function notImplemented(feature: string): RequestHandler {
   };
 }
 
-export const mapRouter: IRouter = Router();
-mapRouter.get("/map/markers", notImplemented("Predator map"));
-mapRouter.get("/map/entity/:id", notImplemented("Predator map"));
-
 export const coalitionsRouter: IRouter = Router();
 coalitionsRouter.get("/coalitions", notImplemented("Coalitions"));
 coalitionsRouter.get("/coalitions/:id", notImplemented("Coalition detail"));

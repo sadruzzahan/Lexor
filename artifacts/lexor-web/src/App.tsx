@@ -3,9 +3,7 @@ import { Switch, Route, Router as WouterRouter } from "wouter";
 import { Toaster } from "sonner";
 import { useDisclaimer } from "@/lib/disclaimer";
 import {
-  MapPin,
   Users2,
-  Building2,
   PhoneCall,
   Scale,
 } from "lucide-react";
@@ -20,6 +18,7 @@ import UploadPage from "@/pages/Upload";
 import CasePage from "@/pages/Case";
 import { Soon } from "@/pages/Soon";
 import EntityPage from "@/pages/Entity";
+import MapPage from "@/pages/Map";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -28,9 +27,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/upload" component={UploadPage} />
       <Route path="/c/:caseId" component={CasePage} />
-      <Route path="/map">
-        <Soon titleKey="page.map.title" Icon={MapPin} />
-      </Route>
+      <Route path="/map" component={MapPage} />
       <Route path="/coalition/:id">
         <Soon titleKey="page.coalition.title" Icon={Users2} />
       </Route>

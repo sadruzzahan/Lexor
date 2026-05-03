@@ -5,8 +5,9 @@ import casesRouter from "./cases";
 import disclosuresRouter from "./disclosures";
 import regulatorsRouter from "./regulators";
 import adversaryRouter from "./adversary";
+import mapRouter from "./map";
+import devSeedRouter from "./devSeed";
 import {
-  mapRouter,
   coalitionsRouter,
   voiceRouter,
   whatsappRouter,
@@ -23,6 +24,7 @@ router.use(regulatorsRouter);
 // Stubs — full implementations land in their respective feature tasks.
 router.use(adversaryRouter);
 router.use(mapRouter);
+router.use(devSeedRouter);
 router.use(coalitionsRouter);
 router.use("/voice", voiceRouter);
 router.use("/whatsapp", whatsappRouter);

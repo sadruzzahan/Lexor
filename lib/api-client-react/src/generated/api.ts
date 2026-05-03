@@ -27,7 +27,6 @@ import type {
   CreateCaseResult,
   DisclosureAckRequest,
   DisclosureAckResponse,
-  Entity,
   EntitySearchResponse,
   ErrorEnvelope,
   FinalizeCaseRequest,
@@ -35,7 +34,9 @@ import type {
   HealthStatus,
   LawyerBid,
   LawyerBidRequest,
+  MapEntityRollup,
   MapMarkerList,
+  MapStats,
   RegulatorFileRequest,
   RegulatorFileResponse,
   SearchAdversaryParams,
@@ -983,6 +984,11 @@ export function useGetAdversary<
 }
 
 /**
+ * Returns one feature per coarse-grid cell. Cells are dropped
+server-side when they contain fewer than 3 markers (k-anonymity)
+unless the caller scopes the query to a specific `entityId`,
+which is the case-page Map tab path.
+
  * @summary Public anonymized map markers
  */
 export const getGetMapMarkersUrl = (params?: GetMapMarkersParams) => {
@@ -1077,6 +1083,79 @@ export function useGetMapMarkers<
 }
 
 /**
+ * @summary Predator Map ticker + leaderboard
+ */
+export const getGetMapStatsUrl = () => {
+  return `/api/counsel/map/stats`;
+};
+
+export const getMapStats = async (options?: RequestInit): Promise<MapStats> => {
+  return customFetch<MapStats>(getGetMapStatsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetMapStatsQueryKey = () => {
+  return [`/api/counsel/map/stats`] as const;
+};
+
+export const getGetMapStatsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getMapStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMapStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetMapStatsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getMapStats>>> = ({
+    signal,
+  }) => getMapStats({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getMapStats>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetMapStatsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getMapStats>>
+>;
+export type GetMapStatsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Predator Map ticker + leaderboard
+ */
+
+export function useGetMapStats<
+  TData = Awaited<ReturnType<typeof getMapStats>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getMapStats>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetMapStatsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
  * @summary Per-entity rollup for the map sidesheet
  */
 export const getGetMapEntityRollupUrl = (id: string) => {
@@ -1086,8 +1165,8 @@ export const getGetMapEntityRollupUrl = (id: string) => {
 export const getMapEntityRollup = async (
   id: string,
   options?: RequestInit,
-): Promise<Entity> => {
-  return customFetch<Entity>(getGetMapEntityRollupUrl(id), {
+): Promise<MapEntityRollup> => {
+  return customFetch<MapEntityRollup>(getGetMapEntityRollupUrl(id), {
     ...options,
     method: "GET",
   });
@@ -1099,7 +1178,7 @@ export const getGetMapEntityRollupQueryKey = (id: string) => {
 
 export const getGetMapEntityRollupQueryOptions = <
   TData = Awaited<ReturnType<typeof getMapEntityRollup>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorEnvelope>,
 >(
   id: string,
   options?: {
@@ -1134,7 +1213,7 @@ export const getGetMapEntityRollupQueryOptions = <
 export type GetMapEntityRollupQueryResult = NonNullable<
   Awaited<ReturnType<typeof getMapEntityRollup>>
 >;
-export type GetMapEntityRollupQueryError = ErrorType<unknown>;
+export type GetMapEntityRollupQueryError = ErrorType<ErrorEnvelope>;
 
 /**
  * @summary Per-entity rollup for the map sidesheet
@@ -1142,7 +1221,7 @@ export type GetMapEntityRollupQueryError = ErrorType<unknown>;
 
 export function useGetMapEntityRollup<
   TData = Awaited<ReturnType<typeof getMapEntityRollup>>,
-  TError = ErrorType<unknown>,
+  TError = ErrorType<ErrorEnvelope>,
 >(
   id: string,
   options?: {

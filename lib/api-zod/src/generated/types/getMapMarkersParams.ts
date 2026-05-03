@@ -13,4 +13,18 @@ export type GetMapMarkersParams = {
    */
   bbox?: string;
   vertical?: CaseVertical;
+  /**
+   * Time window in days (1..1825).
+   * @minimum 1
+   * @maximum 1825
+   */
+  sinceDays?: number;
+  /**
+   * Match markers whose violation_codes array contains this code.
+   */
+  violation?: string;
+  /**
+   * Scope to a single entity. Bypasses the ≥3 cell suppression.
+   */
+  entityId?: string;
 };

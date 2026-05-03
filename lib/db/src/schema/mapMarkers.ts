@@ -5,6 +5,7 @@ import {
   numeric,
   timestamp,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -23,6 +24,14 @@ export const mapMarkersTable = pgTable(
     coarseLat: numeric("coarse_lat", { precision: 8, scale: 4 }).notNull(),
     coarseLng: numeric("coarse_lng", { precision: 9, scale: 4 }).notNull(),
     zipCode: text("zip_code"),
+    /**
+     * Deterministic per-(case, entity) fingerprint used to make pipeline
+     * retries idempotent. Stored as a one-way hash of the caseId so we
+     * cannot recover case identity from the marker (preserving the
+     * "no row links to a user" anonymization guarantee) while still
+     * letting `INSERT ... ON CONFLICT DO NOTHING` dedupe re-runs.
+     */
+    caseFingerprint: text("case_fingerprint"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -30,6 +39,10 @@ export const mapMarkersTable = pgTable(
   (t) => [
     index("map_markers_zip_code_idx").on(t.zipCode),
     index("map_markers_entity_id_idx").on(t.entityId),
+    uniqueIndex("map_markers_entity_fingerprint_uq").on(
+      t.entityId,
+      t.caseFingerprint,
+    ),
   ],
 );
 
