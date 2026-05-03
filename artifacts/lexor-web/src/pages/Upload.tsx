@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { FileText } from "lucide-react";
 import { DropZone } from "@/components/upload/DropZone";
 import { PipelineReveal } from "@/components/upload/PipelineReveal";
+import { RevealText } from "@/components/RevealText";
 import { useEventStream } from "@/lib/sse";
 import {
   createCase,
@@ -147,10 +148,10 @@ export default function UploadPage() {
         <h1 className="font-display text-4xl md:text-5xl tracking-tight">
           Drop in any scary letter.
         </h1>
-        <p className="mt-3 text-fg-muted">
+        <RevealText as="p" className="mt-3 text-fg-muted">
           We'll explain it in plain language, find the laws on your side, and
-          draft your response — in about 30&nbsp;seconds.
-        </p>
+          draft your response — in about 30 seconds.
+        </RevealText>
       </div>
 
       {pageDrag && !caseId && (

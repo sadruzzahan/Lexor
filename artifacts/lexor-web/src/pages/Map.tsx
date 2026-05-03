@@ -11,6 +11,7 @@ import { FilterPanel } from "@/components/map/FilterPanel";
 import { StatTicker } from "@/components/map/StatTicker";
 import { Leaderboard } from "@/components/map/Leaderboard";
 import { SideSheet } from "@/components/map/SideSheet";
+import { RevealText } from "@/components/RevealText";
 
 export default function MapPage() {
   useDocumentTitle("Predator Map — Lexor");
@@ -72,10 +73,10 @@ export default function MapPage() {
           <div className="font-display text-fg text-lg">
             The map starts empty.
           </div>
-          <p className="text-sm mt-1">
+          <RevealText as="p" className="text-sm mt-1">
             Every letter someone uploads pins one anonymized cell here. Be the
             first.
-          </p>
+          </RevealText>
         </div>
       )}
 

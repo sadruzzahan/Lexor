@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useT, type TKey } from "@/lib/i18n";
 import { useReducedMotionPref } from "@/lib/hooks";
+import { RevealText } from "@/components/RevealText";
 
 interface BentoFeature {
   k: number;
@@ -118,7 +119,9 @@ export function Bento() {
       >
         {t("section.bento.heading")}
       </h2>
-      <p className="mt-4 text-fg-muted max-w-2xl">{t("about.lead")}</p>
+      <RevealText as="p" className="mt-4 text-fg-muted max-w-2xl">
+        {t("about.lead")}
+      </RevealText>
 
       <div className="mt-10 grid grid-cols-1 md:grid-cols-4 md:auto-rows-[12rem] gap-3 sm:gap-4">
         {FEATURES.map(({ k, span, icon: Icon, titleKey, descKey }, i) => (

@@ -52,11 +52,9 @@ export default function VoicePage() {
             <span className="text-xs uppercase tracking-widest">Call</span>
           </div>
           <div className="font-display text-3xl tracking-tight">{phone}</div>
-          <p className="mt-3 text-sm text-fg-muted">
-            Dial and you're talking to {BRAND.name} in under three seconds. Reads
-            the legal disclaimer in your language, helps you describe the letter,
-            and texts you a link to upload a photo if you need.
-          </p>
+          <RevealText as="p" className="mt-3 text-sm text-fg-muted">
+            {`Dial and you're talking to ${BRAND.name} in under three seconds. Reads the legal disclaimer in your language, helps you describe the letter, and texts you a link to upload a photo if you need.`}
+          </RevealText>
           {!info?.configured && (
             <div className="mt-4 rounded-lg border border-amber-700/40 bg-amber-900/20 px-3 py-2 text-xs text-amber-200">
               Voice is in setup — phone routing not yet provisioned. Bridge code is
@@ -89,9 +87,12 @@ export default function VoicePage() {
               />
             </div>
             <div className="text-sm text-fg-muted leading-relaxed">
-              Scan with your phone, then send a photo of the letter, paste text,
-              or hold to record a voice note in your language. We reply with a
-              one-line explainer + a link to your full case in under 60&nbsp;seconds.
+              <RevealText as="span">
+                Scan with your phone, then send a photo of the letter, paste
+                text, or hold to record a voice note in your language. We reply
+                with a one-line explainer + a link to your full case in under
+                60 seconds.
+              </RevealText>
               {wa && (
                 <div className="mt-3 font-mono text-xs text-fg-subtle">
                   Number: {wa}

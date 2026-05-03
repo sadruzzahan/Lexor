@@ -161,13 +161,28 @@ async function main(): Promise<void> {
   );
   results.push(
     await check("map stats returns JSON", () =>
-      expectGet(`${BASE}/api/counsel/map/stats`, [200], ["totalPins"]),
+      expectGet(`${BASE}/api/counsel/map/stats`, [200], ["totalMarkers"]),
     ),
   );
   results.push(
-    await check("coalitions list responds", () =>
-      expectGet(`${BASE}/api/counsel/coalitions`, [200]),
-    ),
+    await check("coalitions list + coalition UI render", async () => {
+      const apiRes = await fetch(`${BASE}/api/counsel/coalitions`);
+      if (apiRes.status !== 200) {
+        throw new Error(`coalitions API status=${apiRes.status}`);
+      }
+      const list = (await apiRes.json()) as Array<{ id?: string }> | { coalitions?: Array<{ id?: string }> };
+      const items = Array.isArray(list) ? list : (list?.coalitions ?? []);
+      const id = items.find((c) => typeof c?.id === "string")?.id;
+      if (!id) {
+        // No coalitions yet — at least confirm the index UI route renders.
+        return await expectGet(`${BASE}/lexor/`, [200], ["Lexor"]);
+      }
+      return await expectGet(
+        `${BASE}/lexor/coalition/${id}`,
+        [200],
+        ["Lexor"],
+      );
+    }),
   );
   results.push(
     await check(
