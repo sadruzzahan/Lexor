@@ -84,5 +84,8 @@
     "wouter": "^3.3.5",
     "zod": "catalog:",
     "zustand": "^5.0.12"
+  },
+  "dependencies": {
+    "jspdf": "^4.2.1"
   }
 }

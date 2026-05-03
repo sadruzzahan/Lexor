@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import jsPDF from "jspdf";
 import {
   Gavel,
   Loader2,
@@ -52,13 +53,6 @@ const OUTCOME_LABEL: Record<TrialOutcome, string> = {
   undetermined: "undetermined on this record",
 };
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
 function prefersReducedMotion(): boolean {
   if (typeof window === "undefined" || !window.matchMedia) return false;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -105,17 +99,11 @@ function Typewriter({
   speed?: number;
   onDone?: () => void;
 }) {
-  const reduced = prefersReducedMotion();
-  const [shown, setShown] = useState(reduced ? text.length : 0);
+  const [shown, setShown] = useState(0);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
 
   useEffect(() => {
-    if (reduced) {
-      setShown(text.length);
-      onDoneRef.current?.();
-      return;
-    }
     setShown(0);
     let cancelled = false;
     const start = performance.now();
@@ -132,7 +120,7 @@ function Typewriter({
     return () => {
       cancelled = true;
     };
-  }, [text, speed, reduced]);
+  }, [text, speed]);
 
   return (
     <span>
@@ -154,83 +142,118 @@ interface RevealState {
 }
 
 type RevealAction =
-  | { type: "reset"; turns: TrialTurnView[] }
+  | { type: "reset"; turns: TrialTurnView[]; revealAll?: boolean }
   | { type: "advance" };
 
 function reducer(state: RevealState, action: RevealAction): RevealState {
   if (action.type === "reset") {
-    return { revealed: 0, pending: action.turns };
+    return {
+      revealed: action.revealAll
+        ? action.turns.length
+        : action.turns.length > 0
+          ? 1
+          : 0,
+      pending: action.turns,
+    };
   }
   if (state.revealed >= state.pending.length) return state;
   return { ...state, revealed: state.revealed + 1 };
 }
 
-function downloadPdf(trial: TrialView, caseId: string): void {
-  const turnsHtml = trial.turns
-    .map((t) => {
-      const meta = CHARACTER_META[t.character];
-      return `<p><strong>${meta.label}:</strong> ${escapeHtml(t.line)}${
-        t.citation
-          ? ` <em style="color:#6b7280">(${escapeHtml(t.citation)})</em>`
-          : ""
-      }</p>`;
-    })
-    .join("\n");
+/**
+ * True PDF generation via jsPDF. Wraps lines so a single long turn
+ * doesn't overflow the page. Returns the saved filename so callers can
+ * surface it in a toast.
+ */
+function downloadPdf(trial: TrialView, caseId: string): string {
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 56;
+  const maxWidth = pageWidth - margin * 2;
+  let y = margin;
+
+  function newPageIfNeeded(needed = 16) {
+    if (y + needed > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+  }
+  function writeBlock(
+    text: string,
+    opts: { size?: number; bold?: boolean; gap?: number } = {},
+  ) {
+    const size = opts.size ?? 11;
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setFontSize(size);
+    const lines = doc.splitTextToSize(text, maxWidth);
+    for (const line of lines) {
+      newPageIfNeeded(size + 4);
+      doc.text(line, margin, y);
+      y += size + 4;
+    }
+    y += opts.gap ?? 6;
+  }
+
+  writeBlock("Mirror Trial — Simulated Hearing", { size: 18, bold: true, gap: 12 });
+  writeBlock(`Case ref: ${caseId}`, { size: 10 });
+  writeBlock(`Generated: ${new Date(trial.startedAt).toLocaleString()}`, {
+    size: 10,
+    gap: 12,
+  });
   const outcomeLine = trial.predictedOutcome
     ? `Predicted outcome: ${OUTCOME_LABEL[trial.predictedOutcome]}.`
     : "Outcome undetermined.";
-  const swing = trial.swingArguments.length
-    ? `<h3>Swing arguments</h3><ol>${trial.swingArguments
-        .map((s) => `<li>${escapeHtml(s)}</li>`)
-        .join("")}</ol>`
-    : "";
-  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Mirror Trial — Case ${escapeHtml(
-    caseId.slice(0, 8),
-  )}</title><style>
-body{font-family:Georgia,serif;max-width:720px;margin:40px auto;padding:0 24px;line-height:1.5;color:#111}
-h1,h3{font-family:'Helvetica Neue',Arial,sans-serif}
-.disclaimer{margin-top:48px;padding-top:16px;border-top:1px solid #ddd;font-size:12px;color:#6b7280}
-</style></head><body>
-<h1>Mirror Trial — Simulated Hearing</h1>
-<p><strong>Case ref:</strong> ${escapeHtml(caseId)}</p>
-<p><strong>Generated:</strong> ${escapeHtml(new Date(trial.startedAt).toLocaleString())}</p>
-<p>${escapeHtml(outcomeLine)}</p>
-${
-  trial.predictedRationale
-    ? `<p><em>${escapeHtml(trial.predictedRationale)}</em></p>`
-    : ""
-}
-<h3>Transcript</h3>
-${turnsHtml}
-${swing}
-<p class="disclaimer">This transcript was generated by Lexor's Mirror Trial,
-a simulated hearing produced by AI agents from the case record. It is
-NOT a court proceeding, NOT legal advice, and MUST NOT be filed or
-relied upon as a prediction of any actual outcome. Consult a licensed
-attorney before taking action.</p>
-</body></html>`;
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
-  const w = window.open(url, "_blank");
-  if (!w) {
-    toast.error("Pop-up blocked — allow pop-ups to download.");
-    return;
+  writeBlock(outcomeLine, { size: 12, bold: true });
+  if (trial.predictedRationale) {
+    writeBlock(trial.predictedRationale, { size: 11, gap: 12 });
   }
-  setTimeout(() => {
-    w.print();
-    URL.revokeObjectURL(url);
-  }, 400);
+
+  writeBlock("Transcript", { size: 14, bold: true, gap: 8 });
+  for (const t of trial.turns) {
+    const meta = CHARACTER_META[t.character];
+    writeBlock(`${meta.label}:`, { size: 11, bold: true, gap: 2 });
+    writeBlock(t.line, { size: 11 });
+    if (t.citation) writeBlock(`(${t.citation})`, { size: 10, gap: 8 });
+  }
+
+  if (trial.swingArguments.length > 0) {
+    writeBlock("Arguments that swung it", { size: 14, bold: true, gap: 8 });
+    trial.swingArguments.forEach((s, i) =>
+      writeBlock(`${i + 1}. ${s}`, { size: 11 }),
+    );
+  }
+
+  y += 8;
+  newPageIfNeeded(60);
+  doc.setDrawColor(180);
+  doc.line(margin, y, pageWidth - margin, y);
+  y += 12;
+  writeBlock(
+    "This transcript was generated by Lexor's Mirror Trial, a simulated " +
+      "hearing produced by AI agents from the case record. It is NOT a " +
+      "court proceeding, NOT legal advice, and MUST NOT be filed or relied " +
+      "upon as a prediction of any actual outcome. Consult a licensed " +
+      "attorney before taking action.",
+    { size: 9 },
+  );
+
+  const filename = `mirror-trial-${caseId.slice(0, 8)}.pdf`;
+  doc.save(filename);
+  return filename;
 }
 
 export function MirrorTrial({ row }: { row: CaseRow }) {
   const caseId = row.id;
+  const reduced = prefersReducedMotion();
   const [trial, setTrial] = useState<TrialView | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [state, dispatch] = useReducer(reducer, { revealed: 0, pending: [] });
   const [verdictArmed, setVerdictArmed] = useState(false);
 
-  // Initial fetch — replay if persisted.
+  // Initial fetch — replay if persisted. Reduced-motion users skip the
+  // animated reveal and see the entire transcript at once.
   useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -239,19 +262,7 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
         if (!alive) return;
         setTrial(t);
         if (t && t.status === "complete") {
-          // Replay path: reveal turns instantly so the user sees the
-          // saved transcript without waiting for new model calls. The
-          // typewriter still animates per turn.
-          dispatch({ type: "reset", turns: t.turns });
-          // Auto-advance through all saved turns at a brisk cadence so
-          // the replay feels alive without retracing the original
-          // generation latency.
-          let i = 0;
-          const interval = setInterval(() => {
-            i += 1;
-            dispatch({ type: "advance" });
-            if (i >= t.turns.length) clearInterval(interval);
-          }, 600);
+          dispatch({ type: "reset", turns: t.turns, revealAll: reduced });
         }
       })
       .catch(() => {
@@ -263,11 +274,12 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
     return () => {
       alive = false;
     };
-  }, [caseId]);
+  }, [caseId, reduced]);
 
   // Fire the gavel sound + flash exactly once when a verdict turn
-  // (judge's last line) becomes visible.
+  // (judge's last line) becomes visible. Skipped in reduced-motion.
   useEffect(() => {
+    if (reduced) return;
     if (!trial || trial.status !== "complete") return;
     const judgeFinalIdx = (() => {
       for (let i = trial.turns.length - 1; i >= 0; i--) {
@@ -280,7 +292,7 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
       playGavel();
       setTimeout(() => setVerdictArmed(false), 900);
     }
-  }, [state.revealed, trial]);
+  }, [state.revealed, trial, reduced]);
 
   async function startTrial(force: boolean) {
     setRunning(true);
@@ -288,9 +300,10 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
     try {
       const t = await runTrial(caseId, { force });
       setTrial(t);
-      dispatch({ type: "reset", turns: t.turns });
-      // Reveal lines one-by-one with a small base cadence; each turn's
-      // Typewriter will gate the next via onDone.
+      // Reveal the first turn immediately so its Typewriter can drive
+      // subsequent advances; in reduced-motion mode show every turn
+      // up-front with no progressive reveal.
+      dispatch({ type: "reset", turns: t.turns, revealAll: reduced });
       const tookMs = Math.round(performance.now() - t0);
       toast.success(`Hearing complete in ${(tookMs / 1000).toFixed(1)}s`);
     } catch (err) {
@@ -348,14 +361,30 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
     );
   }
 
+  const allRevealed = state.revealed >= state.pending.length;
+
   return (
     <div className="space-y-6">
-      {/* Courtroom layout — three avatars over a bench. */}
+      {/* Courtroom layout — three avatars over a bench. Rendered without
+          framer-motion in reduced-motion mode. */}
       <div className="rounded-lg2 border border-border-strong bg-bg-elevated p-5">
         <div className="grid grid-cols-3 gap-3 items-end">
-          <Avatar character="your_counsel" active={lastSpeaker(visibleTurns) === "your_counsel"} />
-          <Avatar character="judge" active={lastSpeaker(visibleTurns) === "judge"} elevated />
-          <Avatar character="opposing" active={lastSpeaker(visibleTurns) === "opposing"} />
+          <Avatar
+            character="your_counsel"
+            active={!reduced && lastSpeaker(visibleTurns) === "your_counsel"}
+            reduced={reduced}
+          />
+          <Avatar
+            character="judge"
+            active={!reduced && lastSpeaker(visibleTurns) === "judge"}
+            elevated
+            reduced={reduced}
+          />
+          <Avatar
+            character="opposing"
+            active={!reduced && lastSpeaker(visibleTurns) === "opposing"}
+            reduced={reduced}
+          />
         </div>
         <div className="mt-3 h-1 rounded-full bg-gradient-to-r from-transparent via-border-strong to-transparent" />
         <div className="mt-1 text-center text-[10px] uppercase tracking-[0.2em] text-fg-subtle">
@@ -363,129 +392,166 @@ export function MirrorTrial({ row }: { row: CaseRow }) {
         </div>
       </div>
 
-      {/* Verdict flash overlay — visual gavel strike. */}
-      <AnimatePresence>
-        {verdictArmed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 0.6 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="pointer-events-none fixed inset-0 z-20 bg-accent/30"
-            aria-hidden
-          />
-        )}
-      </AnimatePresence>
+      {/* Verdict flash overlay — visual gavel strike. Skipped if reduced. */}
+      {!reduced && (
+        <AnimatePresence>
+          {verdictArmed && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.6 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              className="pointer-events-none fixed inset-0 z-20 bg-accent/30"
+              aria-hidden
+            />
+          )}
+        </AnimatePresence>
+      )}
 
-      {/* Transcript — typewriter speech bubbles. */}
-      <div
-        className="rounded-lg2 border border-border-strong bg-bg-elevated p-5 space-y-3"
-        aria-live="polite"
-      >
-        <AnimatePresence initial={false}>
-          {visibleTurns.map((t, i) => {
-            const isLast = i === visibleTurns.length - 1;
+      {/* Transcript. In reduced-motion mode we render a flat static
+          transcript with no AnimatePresence and no typewriter. */}
+      {reduced ? (
+        <div
+          className="rounded-lg2 border border-border-strong bg-bg-elevated p-5 space-y-3"
+          aria-label="Hearing transcript"
+        >
+          {trial.turns.map((t) => {
             const meta = CHARACTER_META[t.character];
             return (
-              <motion.div
-                key={t.ord}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className={`rounded-lg2 border p-4 ${meta.tone}`}
-              >
+              <div key={t.ord} className={`rounded-lg2 border p-4 ${meta.tone}`}>
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-fg-muted mb-1.5">
                   <meta.Icon className="size-3.5" aria-hidden />
                   {meta.label}
                 </div>
-                <div className="text-sm leading-relaxed text-fg">
-                  {isLast ? (
-                    <Typewriter
-                      text={t.line}
-                      onDone={() => dispatch({ type: "advance" })}
-                    />
-                  ) : (
-                    t.line
-                  )}
-                </div>
+                <div className="text-sm leading-relaxed text-fg">{t.line}</div>
                 {t.citation && (
                   <div className="mt-1.5 text-[11px] text-fg-subtle italic">
                     {t.citation}
                   </div>
                 )}
-              </motion.div>
+              </div>
             );
           })}
-        </AnimatePresence>
-        {state.revealed < state.pending.length && (
-          <div className="text-xs text-fg-subtle inline-flex items-center gap-2">
-            <Loader2 className="size-3 animate-spin" /> Next line incoming…
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div
+          className="rounded-lg2 border border-border-strong bg-bg-elevated p-5 space-y-3"
+          aria-live="polite"
+          aria-label="Hearing transcript"
+        >
+          <AnimatePresence initial={false}>
+            {visibleTurns.map((t, i) => {
+              const isLast = i === visibleTurns.length - 1;
+              const meta = CHARACTER_META[t.character];
+              return (
+                <motion.div
+                  key={t.ord}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  className={`rounded-lg2 border p-4 ${meta.tone}`}
+                >
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-fg-muted mb-1.5">
+                    <meta.Icon className="size-3.5" aria-hidden />
+                    {meta.label}
+                  </div>
+                  <div className="text-sm leading-relaxed text-fg">
+                    {isLast ? (
+                      <Typewriter
+                        text={t.line}
+                        onDone={() => dispatch({ type: "advance" })}
+                      />
+                    ) : (
+                      t.line
+                    )}
+                  </div>
+                  {t.citation && (
+                    <div className="mt-1.5 text-[11px] text-fg-subtle italic">
+                      {t.citation}
+                    </div>
+                  )}
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+          {!allRevealed && (
+            <div className="text-xs text-fg-subtle inline-flex items-center gap-2">
+              <Loader2 className="size-3 animate-spin" /> Next line incoming…
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Verdict + actions. */}
-      {trial.status === "complete" &&
-        state.revealed >= state.pending.length && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-lg2 border border-accent/40 bg-accent/5 p-5"
-          >
-            <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-accent">
-              <Gavel className="size-4" aria-hidden /> Predicted outcome
-            </div>
-            <div className="mt-1 font-display text-2xl text-fg first-letter:uppercase">
-              {trial.predictedOutcome
-                ? OUTCOME_LABEL[trial.predictedOutcome]
-                : "Undetermined"}
-            </div>
-            {trial.predictedRationale && (
-              <p className="mt-2 text-sm text-fg-muted leading-relaxed">
-                {trial.predictedRationale}
-              </p>
-            )}
-            {trial.swingArguments.length > 0 && (
-              <>
-                <div className="mt-4 text-xs uppercase tracking-wider text-fg-subtle">
-                  Arguments that swung it
-                </div>
-                <ol className="mt-2 space-y-1.5 text-sm text-fg list-decimal pl-5">
-                  {trial.swingArguments.map((s, i) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ol>
-              </>
-            )}
-            <div className="mt-5 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => downloadPdf(trial, caseId)}
-                className="shimmer-btn rounded-base px-3 py-2 text-sm inline-flex items-center gap-2"
-              >
-                <Download className="size-4" /> Download transcript PDF
-              </button>
-              <button
-                type="button"
-                onClick={() => void startTrial(true)}
-                disabled={running}
-                className="ghost-btn rounded-base px-3 py-2 text-sm inline-flex items-center gap-2 disabled:opacity-60"
-              >
-                {running ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-4" />
-                )}
-                Run again
-              </button>
-            </div>
-            <p className="mt-4 text-[10px] text-fg-subtle">
-              Mirror Trial is a simulated hearing produced by AI agents from
-              the case record. It is not a court proceeding, not legal advice,
-              and not a prediction of any actual outcome.
+      {trial.status === "complete" && allRevealed && (
+        <motion.div
+          initial={reduced ? false : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-lg2 border border-accent/40 bg-accent/5 p-5"
+        >
+          <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-accent">
+            <Gavel className="size-4" aria-hidden /> Predicted outcome
+          </div>
+          <div className="mt-1 font-display text-2xl text-fg first-letter:uppercase">
+            {trial.predictedOutcome
+              ? OUTCOME_LABEL[trial.predictedOutcome]
+              : "Undetermined"}
+          </div>
+          {trial.predictedRationale && (
+            <p className="mt-2 text-sm text-fg-muted leading-relaxed">
+              {trial.predictedRationale}
             </p>
-          </motion.div>
-        )}
+          )}
+          {trial.swingArguments.length > 0 && (
+            <>
+              <div className="mt-4 text-xs uppercase tracking-wider text-fg-subtle">
+                Arguments that swung it
+              </div>
+              <ol className="mt-2 space-y-1.5 text-sm text-fg list-decimal pl-5">
+                {trial.swingArguments.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ol>
+            </>
+          )}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  const filename = downloadPdf(trial, caseId);
+                  toast.success(`Saved ${filename}`);
+                } catch (err) {
+                  const message =
+                    err instanceof Error ? err.message : String(err);
+                  toast.error(`PDF export failed — ${message}`);
+                }
+              }}
+              className="shimmer-btn rounded-base px-3 py-2 text-sm inline-flex items-center gap-2"
+            >
+              <Download className="size-4" /> Download transcript PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => void startTrial(true)}
+              disabled={running}
+              className="ghost-btn rounded-base px-3 py-2 text-sm inline-flex items-center gap-2 disabled:opacity-60"
+            >
+              {running ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              Run again
+            </button>
+          </div>
+          <p className="mt-4 text-[10px] text-fg-subtle">
+            Mirror Trial is a simulated hearing produced by AI agents from
+            the case record. It is not a court proceeding, not legal advice,
+            and not a prediction of any actual outcome.
+          </p>
+        </motion.div>
+      )}
     </div>
   );
 }
@@ -498,28 +564,41 @@ function Avatar({
   character,
   active,
   elevated = false,
+  reduced = false,
 }: {
   character: TrialCharacter;
   active: boolean;
   elevated?: boolean;
+  reduced?: boolean;
 }) {
   const meta = CHARACTER_META[character];
+  const ring = active ? "border-accent" : "border-border-strong";
   return (
     <div className={`flex flex-col items-center ${elevated ? "-mt-3" : ""}`}>
-      <motion.div
-        animate={
-          active
-            ? { scale: [1, 1.06, 1], boxShadow: "0 0 0 4px rgba(255,255,255,0.06)" }
-            : { scale: 1 }
-        }
-        transition={{ duration: 0.6 }}
-        className={`size-14 rounded-full grid place-items-center border ${
-          active ? "border-accent" : "border-border-strong"
-        } bg-bg-raised`}
-        aria-hidden
-      >
-        <meta.Icon className="size-6 text-fg-muted" />
-      </motion.div>
+      {reduced ? (
+        <div
+          className={`size-14 rounded-full grid place-items-center border ${ring} bg-bg-raised`}
+          aria-hidden
+        >
+          <meta.Icon className="size-6 text-fg-muted" />
+        </div>
+      ) : (
+        <motion.div
+          animate={
+            active
+              ? {
+                  scale: [1, 1.06, 1],
+                  boxShadow: "0 0 0 4px rgba(255,255,255,0.06)",
+                }
+              : { scale: 1 }
+          }
+          transition={{ duration: 0.6 }}
+          className={`size-14 rounded-full grid place-items-center border ${ring} bg-bg-raised`}
+          aria-hidden
+        >
+          <meta.Icon className="size-6 text-fg-muted" />
+        </motion.div>
+      )}
       <div className="mt-2 text-[11px] uppercase tracking-wider text-fg-muted text-center">
         {meta.label}
       </div>
