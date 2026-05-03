@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AdversaryDossier,
   Case,
   Coalition,
   CoalitionJoinRequest,
@@ -893,8 +894,8 @@ export const getGetAdversaryUrl = (entityId: string) => {
 export const getAdversary = async (
   entityId: string,
   options?: RequestInit,
-): Promise<Entity> => {
-  return customFetch<Entity>(getGetAdversaryUrl(entityId), {
+): Promise<AdversaryDossier> => {
+  return customFetch<AdversaryDossier>(getGetAdversaryUrl(entityId), {
     ...options,
     method: "GET",
   });

@@ -5,8 +5,7 @@
  * Lexor / zexorex API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { EntitySearchResult } from "./entitySearchResult";
 
-export interface EntitySearchResponse {
-  results: EntitySearchResult[];
-}
+export type AdversaryDossierRegistrationData = {
+  [key: string]: unknown;
+} | null;

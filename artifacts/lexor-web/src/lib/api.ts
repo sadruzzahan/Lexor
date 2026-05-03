@@ -66,6 +66,90 @@ export interface CaseRow {
   violations: Violation[] | null;
   responseLetter: ResponseLetter | null;
   regulatorComplaints: RegulatorComplaint[] | null;
+  adversaryEntityId: string | null;
+}
+
+export type EntityKind = "landlord" | "employer" | "debt_collector" | "unknown";
+
+export interface DossierDefense {
+  id: string;
+  title: string;
+  summary: string;
+  citation: string;
+  citationUrl: string;
+  successRate?: string | null;
+  bodyParagraph: string;
+}
+
+export interface DossierTimelineEvent {
+  date: string;
+  label: string;
+  kind: "lawsuit" | "settlement" | "consent_order" | "sanction" | "press";
+  url?: string | null;
+}
+
+export interface DossierSanction {
+  year: number;
+  agency: string;
+  amountUsd?: number | null;
+  summary: string;
+  url?: string | null;
+}
+
+export interface DossierLitigationStats {
+  totalCases: number;
+  asPlaintiff: number;
+  asDefendant: number;
+  winRatePctAsDefendant: number;
+  sanctions: DossierSanction[];
+  commonViolations: string[];
+}
+
+export interface DossierOtherCase {
+  vertical: string;
+  jurisdiction: string | null;
+  createdAt: string;
+}
+
+export interface AdversaryDossier {
+  entityId: string;
+  displayName: string;
+  normalizedName: string;
+  kind: EntityKind;
+  jurisdictions: string[];
+  alternateNames: string[];
+  registrationData: Record<string, unknown> | null;
+  litigationStats: DossierLitigationStats;
+  defensesThatWorked: DossierDefense[];
+  timeline: DossierTimelineEvent[];
+  otherCases: DossierOtherCase[];
+  source: "curated" | "ai_estimated" | "empty";
+  sourceNote: string;
+  lastRefreshedAt: string | null;
+}
+
+export async function getAdversary(entityId: string): Promise<AdversaryDossier> {
+  const r = await fetch(`${API}/adversary/${entityId}`);
+  if (!r.ok) throw new Error(`getAdversary failed: ${r.status}`);
+  return r.json();
+}
+
+export interface EntitySearchResult {
+  id: string | null;
+  slug: string;
+  displayName: string;
+  kind: EntityKind;
+  jurisdictions: string[];
+  alternateNames: string[];
+}
+
+export async function searchAdversary(
+  q: string,
+): Promise<EntitySearchResult[]> {
+  const r = await fetch(`${API}/adversary/search?q=${encodeURIComponent(q)}`);
+  if (!r.ok) throw new Error(`searchAdversary failed: ${r.status}`);
+  const j = (await r.json()) as { results: EntitySearchResult[] };
+  return j.results;
 }
 
 export interface Violation {

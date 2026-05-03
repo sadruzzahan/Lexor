@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Copy, Download, Check } from "lucide-react";
+import { Copy, Download, Check, Sparkles, X, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import type { CaseRow } from "@/lib/api";
+import { useInjectedDefenses, selectInjectedFor } from "@/lib/defenseInjection";
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
 
 function Typewriter({ text, speed = 8 }: { text: string; speed?: number }) {
   const [shown, setShown] = useState(0);
@@ -43,14 +48,28 @@ export function Defense({ row }: { row: CaseRow }) {
     | { documentType?: string; keyClaims?: string[]; sender?: { name?: string | null } }
     | null;
   const [copied, setCopied] = useState(false);
+  const injected = useInjectedDefenses(selectInjectedFor(row.id));
+  const removeInjected = useInjectedDefenses((s) => s.remove);
 
   const summary = parsed?.documentType
     ? `This is a ${parsed.documentType.toLowerCase()}${parsed.sender?.name ? ` from ${parsed.sender.name}` : ""}.`
     : "Plain-language summary of your letter.";
 
+  function combinedPlainText(): string {
+    if (!letter) return "";
+    if (injected.length === 0) return letter.plainText;
+    const extras = injected
+      .map(
+        (d, i) =>
+          `\n\n[Additional ground ${i + 1} — from ${d.fromEntityName} dossier]\n${d.bodyParagraph}\n(Cf. ${d.citation})`,
+      )
+      .join("");
+    return letter.plainText + extras;
+  }
+
   function copyEmail() {
     if (!letter) return;
-    void navigator.clipboard.writeText(letter.plainText).then(() => {
+    void navigator.clipboard.writeText(combinedPlainText()).then(() => {
       setCopied(true);
       toast.success("Email body copied");
       setTimeout(() => setCopied(false), 1500);
@@ -59,7 +78,20 @@ export function Defense({ row }: { row: CaseRow }) {
 
   function downloadPdf() {
     if (!letter) return;
-    const blob = new Blob([letter.html], { type: "text/html" });
+    const extrasHtml =
+      injected.length === 0
+        ? ""
+        : `<hr style="margin:32px 0;border:none;border-top:1px solid #ddd"/>` +
+          injected
+            .map(
+              (d, i) =>
+                `<p><strong>Additional ground ${i + 1}</strong> — from ${escapeHtml(
+                  d.fromEntityName,
+                )} dossier</p><p>${escapeHtml(d.bodyParagraph)}</p><p><em>Cf. ${escapeHtml(d.citation)}</em></p>`,
+            )
+            .join("");
+    const html = letter.html.replace("</body>", `${extrasHtml}</body>`);
+    const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const w = window.open(url, "_blank");
     if (!w) {
@@ -138,6 +170,43 @@ export function Defense({ row }: { row: CaseRow }) {
           </div>
           <div className="rounded-base bg-bg-raised border border-border p-5 max-h-[60vh] overflow-y-auto">
             <Typewriter text={letter.plainText} />
+            {injected.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-border space-y-4">
+                {injected.map((d, i) => (
+                  <div
+                    key={d.id}
+                    className="rounded-base border border-accent/30 bg-accent/5 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-accent">
+                        <Sparkles className="size-3.5" />
+                        Additional ground {i + 1} — from {d.fromEntityName}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeInjected(row.id, d.id)}
+                        className="text-fg-subtle hover:text-fg"
+                        aria-label="Remove this defense"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                    <div className="mt-2 font-medium text-sm text-fg">{d.title}</div>
+                    <p className="mt-1.5 text-sm text-fg leading-relaxed">
+                      {d.bodyParagraph}
+                    </p>
+                    <a
+                      href={d.citationUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                    >
+                      {d.citation} <ExternalLink className="size-3" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {letter.deliveryHints && letter.deliveryHints.length > 0 && (
             <ul className="mt-4 space-y-1.5 text-xs text-fg-muted">

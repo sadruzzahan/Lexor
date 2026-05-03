@@ -19,6 +19,7 @@ import DisclaimerPage from "@/pages/Disclaimer";
 import UploadPage from "@/pages/Upload";
 import CasePage from "@/pages/Case";
 import { Soon } from "@/pages/Soon";
+import EntityPage from "@/pages/Entity";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -33,9 +34,7 @@ function Router() {
       <Route path="/coalition/:id">
         <Soon titleKey="page.coalition.title" Icon={Users2} />
       </Route>
-      <Route path="/entity/:id">
-        <Soon titleKey="page.entity.title" Icon={Building2} />
-      </Route>
+      <Route path="/entity/:id" component={EntityPage} />
       <Route path="/voice">
         <Soon titleKey="page.voice.title" Icon={PhoneCall} />
       </Route>

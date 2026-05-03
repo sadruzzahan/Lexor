@@ -203,17 +203,12 @@ export const SearchAdversaryQueryParams = zod.object({
 export const SearchAdversaryResponse = zod.object({
   results: zod.array(
     zod.object({
-      id: zod.string().uuid(),
-      normalizedName: zod.string(),
+      id: zod.string().uuid().nullish(),
+      slug: zod.string(),
       displayName: zod.string(),
       kind: zod.enum(["landlord", "employer", "debt_collector", "unknown"]),
-      jurisdictions: zod.array(zod.string()).optional(),
-      registrationData: zod.record(zod.string(), zod.unknown()).nullish(),
-      litigationStats: zod.record(zod.string(), zod.unknown()).nullish(),
-      alternateNames: zod.array(zod.string()).optional(),
-      pinCount: zod.number().optional(),
-      lastRefreshedAt: zod.coerce.date().nullish(),
-      createdAt: zod.coerce.date().optional(),
+      jurisdictions: zod.array(zod.string()),
+      alternateNames: zod.array(zod.string()),
     }),
   ),
 });
@@ -226,17 +221,68 @@ export const GetAdversaryParams = zod.object({
 });
 
 export const GetAdversaryResponse = zod.object({
-  id: zod.string().uuid(),
-  normalizedName: zod.string(),
+  entityId: zod.string().uuid(),
   displayName: zod.string(),
+  normalizedName: zod.string(),
   kind: zod.enum(["landlord", "employer", "debt_collector", "unknown"]),
-  jurisdictions: zod.array(zod.string()).optional(),
+  jurisdictions: zod.array(zod.string()),
+  alternateNames: zod.array(zod.string()),
   registrationData: zod.record(zod.string(), zod.unknown()).nullish(),
-  litigationStats: zod.record(zod.string(), zod.unknown()).nullish(),
-  alternateNames: zod.array(zod.string()).optional(),
-  pinCount: zod.number().optional(),
+  litigationStats: zod.object({
+    totalCases: zod.number(),
+    asPlaintiff: zod.number(),
+    asDefendant: zod.number(),
+    winRatePctAsDefendant: zod.number(),
+    sanctions: zod.array(
+      zod.object({
+        year: zod.number(),
+        agency: zod.string(),
+        amountUsd: zod.number().nullish(),
+        summary: zod.string(),
+        url: zod.string().nullish(),
+      }),
+    ),
+    commonViolations: zod.array(zod.string()),
+  }),
+  defensesThatWorked: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      summary: zod.string(),
+      citation: zod.string(),
+      citationUrl: zod.string(),
+      successRate: zod.string().nullish(),
+      bodyParagraph: zod.string(),
+    }),
+  ),
+  timeline: zod.array(
+    zod.object({
+      date: zod.string(),
+      label: zod.string(),
+      kind: zod.enum([
+        "lawsuit",
+        "settlement",
+        "consent_order",
+        "sanction",
+        "press",
+      ]),
+      url: zod.string().nullish(),
+    }),
+  ),
+  otherCases: zod
+    .array(
+      zod.object({
+        vertical: zod.enum(["eviction", "debt", "wage", "other"]),
+        jurisdiction: zod.string().nullable(),
+        createdAt: zod.coerce.date(),
+      }),
+    )
+    .describe(
+      "Anonymized aggregate of other Lexor cases against the same\nadversary. Intentionally omits any per-case identifier to avoid\nleaking cross-user case participation.\n",
+    ),
+  source: zod.enum(["curated", "ai_estimated", "empty"]),
+  sourceNote: zod.string(),
   lastRefreshedAt: zod.coerce.date().nullish(),
-  createdAt: zod.coerce.date().optional(),
 });
 
 /**

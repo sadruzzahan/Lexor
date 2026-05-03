@@ -10,6 +10,7 @@ import { draftResponseLetter } from "./drafting/responseLetter";
 import { draftRegulatorComplaint } from "./drafting/regulatorComplaint";
 import type { RegulatorComplaint } from "./drafting/regulatorComplaint";
 import type { ResponseLetter } from "./drafting/responseLetter";
+import { resolveAdversaryForCase } from "./adversary";
 
 /**
  * Per-case event bus. SSE consumers subscribe via the events route; the
@@ -281,8 +282,34 @@ export async function runPipeline(caseId: string): Promise<void> {
       (fp) => ({ fingerprint: fp.slice(0, 12), method: "sha256-stub" }),
     );
 
-    // Adversary + coalition stubs (real impls land in Features 2 + 5)
-    await step(caseId, "adversary", async () => null, () => ({ status: "deferred" }));
+    // Adversary resolution — Feature 2. Resolves the opposing party
+    // (extraction.sender.name) to a curated/persisted entity row and
+    // links the case via adversaryEntityId so the Adversary tab can
+    // hydrate from the same caseId.
+    const adversary = await step(
+      caseId,
+      "adversary",
+      async () =>
+        resolveAdversaryForCase({
+          rawSenderName: extraction.sender.name,
+          jurisdiction,
+        }),
+      (a) =>
+        a
+          ? { entityId: a.entityId, source: a.source }
+          : { status: "no-sender-name" },
+    );
+    if (adversary) {
+      await db
+        .update(casesTable)
+        .set({
+          adversaryEntityId: adversary.entityId,
+          updatedAt: new Date(),
+        })
+        .where(eq(casesTable.id, caseId));
+    }
+
+    // Coalition stub — real impl lands in Feature 5.
     await step(caseId, "coalition", async () => null, () => ({ status: "deferred" }));
 
     await db

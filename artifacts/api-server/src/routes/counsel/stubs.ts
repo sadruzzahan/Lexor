@@ -20,13 +20,6 @@ function notImplemented(feature: string): RequestHandler {
   };
 }
 
-export const adversaryRouter: IRouter = Router();
-adversaryRouter.get("/adversary/search", notImplemented("Adversary search"));
-adversaryRouter.get(
-  "/adversary/:entityId",
-  notImplemented("Adversary dossier"),
-);
-
 export const mapRouter: IRouter = Router();
 mapRouter.get("/map/markers", notImplemented("Predator map"));
 mapRouter.get("/map/entity/:id", notImplemented("Predator map"));

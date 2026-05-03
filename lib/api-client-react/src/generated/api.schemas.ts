@@ -205,8 +205,102 @@ export interface Entity {
   createdAt?: string;
 }
 
+export interface EntitySearchResult {
+  id?: string | null;
+  slug: string;
+  displayName: string;
+  kind: EntityKind;
+  jurisdictions: string[];
+  alternateNames: string[];
+}
+
 export interface EntitySearchResponse {
-  results: Entity[];
+  results: EntitySearchResult[];
+}
+
+export type AdversaryDossierRegistrationData = {
+  [key: string]: unknown;
+} | null;
+
+export type AdversaryDossierLitigationStatsSanctionsItem = {
+  year: number;
+  agency: string;
+  amountUsd?: number | null;
+  summary: string;
+  url?: string | null;
+};
+
+export type AdversaryDossierLitigationStats = {
+  totalCases: number;
+  asPlaintiff: number;
+  asDefendant: number;
+  winRatePctAsDefendant: number;
+  sanctions: AdversaryDossierLitigationStatsSanctionsItem[];
+  commonViolations: string[];
+};
+
+export type AdversaryDossierDefensesThatWorkedItem = {
+  id: string;
+  title: string;
+  summary: string;
+  citation: string;
+  citationUrl: string;
+  successRate?: string | null;
+  bodyParagraph: string;
+};
+
+export type AdversaryDossierTimelineItemKind =
+  (typeof AdversaryDossierTimelineItemKind)[keyof typeof AdversaryDossierTimelineItemKind];
+
+export const AdversaryDossierTimelineItemKind = {
+  lawsuit: "lawsuit",
+  settlement: "settlement",
+  consent_order: "consent_order",
+  sanction: "sanction",
+  press: "press",
+} as const;
+
+export type AdversaryDossierTimelineItem = {
+  date: string;
+  label: string;
+  kind: AdversaryDossierTimelineItemKind;
+  url?: string | null;
+};
+
+export type AdversaryDossierOtherCasesItem = {
+  vertical: CaseVertical;
+  jurisdiction: string | null;
+  createdAt: string;
+};
+
+export type AdversaryDossierSource =
+  (typeof AdversaryDossierSource)[keyof typeof AdversaryDossierSource];
+
+export const AdversaryDossierSource = {
+  curated: "curated",
+  ai_estimated: "ai_estimated",
+  empty: "empty",
+} as const;
+
+export interface AdversaryDossier {
+  entityId: string;
+  displayName: string;
+  normalizedName: string;
+  kind: EntityKind;
+  jurisdictions: string[];
+  alternateNames: string[];
+  registrationData?: AdversaryDossierRegistrationData;
+  litigationStats: AdversaryDossierLitigationStats;
+  defensesThatWorked: AdversaryDossierDefensesThatWorkedItem[];
+  timeline: AdversaryDossierTimelineItem[];
+  /** Anonymized aggregate of other Lexor cases against the same
+adversary. Intentionally omits any per-case identifier to avoid
+leaking cross-user case participation.
+ */
+  otherCases: AdversaryDossierOtherCasesItem[];
+  source: AdversaryDossierSource;
+  sourceNote: string;
+  lastRefreshedAt?: string | null;
 }
 
 export interface MapMarker {

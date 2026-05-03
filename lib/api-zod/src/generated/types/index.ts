@@ -6,6 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./adversaryDossier";
+export * from "./adversaryDossierDefensesThatWorkedItem";
+export * from "./adversaryDossierLitigationStats";
+export * from "./adversaryDossierLitigationStatsSanctionsItem";
+export * from "./adversaryDossierOtherCasesItem";
+export * from "./adversaryDossierRegistrationData";
+export * from "./adversaryDossierSource";
+export * from "./adversaryDossierTimelineItem";
+export * from "./adversaryDossierTimelineItemKind";
 export * from "./case";
 export * from "./caseParsed";
 export * from "./caseRegulatorComplaintsItem";
@@ -28,6 +37,7 @@ export * from "./entityKind";
 export * from "./entityLitigationStats";
 export * from "./entityRegistrationData";
 export * from "./entitySearchResponse";
+export * from "./entitySearchResult";
 export * from "./errorEnvelope";
 export * from "./errorEnvelopeError";
 export * from "./finalizeCaseRequest";

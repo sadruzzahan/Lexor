@@ -209,7 +209,7 @@ paths:
           description: Entity dossier
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Entity" }
+              schema: { $ref: "#/components/schemas/AdversaryDossier" }
         "404":
           description: Not found
           content:
@@ -597,7 +597,117 @@ components:
       properties:
         results:
           type: array
-          items: { $ref: "#/components/schemas/Entity" }
+          items: { $ref: "#/components/schemas/EntitySearchResult" }
+    EntitySearchResult:
+      type: object
+      required: [slug, displayName, kind, jurisdictions, alternateNames]
+      properties:
+        id: { type: string, format: uuid, nullable: true }
+        slug: { type: string }
+        displayName: { type: string }
+        kind: { $ref: "#/components/schemas/EntityKind" }
+        jurisdictions:
+          type: array
+          items: { type: string }
+        alternateNames:
+          type: array
+          items: { type: string }
+
+    AdversaryDossier:
+      type: object
+      required:
+        - entityId
+        - displayName
+        - normalizedName
+        - kind
+        - jurisdictions
+        - alternateNames
+        - litigationStats
+        - defensesThatWorked
+        - timeline
+        - otherCases
+        - source
+        - sourceNote
+      properties:
+        entityId: { type: string, format: uuid }
+        displayName: { type: string }
+        normalizedName: { type: string }
+        kind: { $ref: "#/components/schemas/EntityKind" }
+        jurisdictions:
+          type: array
+          items: { type: string }
+        alternateNames:
+          type: array
+          items: { type: string }
+        registrationData:
+          type: object
+          additionalProperties: true
+          nullable: true
+        litigationStats:
+          type: object
+          required: [totalCases, asPlaintiff, asDefendant, winRatePctAsDefendant, sanctions, commonViolations]
+          properties:
+            totalCases: { type: integer }
+            asPlaintiff: { type: integer }
+            asDefendant: { type: integer }
+            winRatePctAsDefendant: { type: number }
+            sanctions:
+              type: array
+              items:
+                type: object
+                required: [year, agency, summary]
+                properties:
+                  year: { type: integer }
+                  agency: { type: string }
+                  amountUsd: { type: number, nullable: true }
+                  summary: { type: string }
+                  url: { type: string, nullable: true }
+            commonViolations:
+              type: array
+              items: { type: string }
+        defensesThatWorked:
+          type: array
+          items:
+            type: object
+            required: [id, title, summary, citation, citationUrl, bodyParagraph]
+            properties:
+              id: { type: string }
+              title: { type: string }
+              summary: { type: string }
+              citation: { type: string }
+              citationUrl: { type: string }
+              successRate: { type: string, nullable: true }
+              bodyParagraph: { type: string }
+        timeline:
+          type: array
+          items:
+            type: object
+            required: [date, label, kind]
+            properties:
+              date: { type: string }
+              label: { type: string }
+              kind:
+                type: string
+                enum: [lawsuit, settlement, consent_order, sanction, press]
+              url: { type: string, nullable: true }
+        otherCases:
+          type: array
+          description: |
+            Anonymized aggregate of other Lexor cases against the same
+            adversary. Intentionally omits any per-case identifier to avoid
+            leaking cross-user case participation.
+          items:
+            type: object
+            required: [vertical, jurisdiction, createdAt]
+            properties:
+              vertical: { $ref: "#/components/schemas/CaseVertical" }
+              jurisdiction: { type: string, nullable: true }
+              createdAt: { type: string, format: date-time }
+        source:
+          type: string
+          enum: [curated, ai_estimated, empty]
+        sourceNote: { type: string }
+        lastRefreshedAt: { type: string, format: date-time, nullable: true }
 
     MapMarker:
       type: object

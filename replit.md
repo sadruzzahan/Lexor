@@ -55,3 +55,33 @@ vision → classify → grounding → rules → draft → complaints → embeddi
   work lands with the coalition feature.
 - **45s fixture latency target is operational, not test-enforced.** No
   automated test gate fails a build that exceeds the budget.
+
+### Feature 2 — Adversary Dossier (Task #4) drift
+
+- **Adversary registry is curated, not live.** No CourtListener / OpenCorporates / SEC
+  fetches; `services/adversary/registry.ts` ships a hand-verified set
+  (Greystar, Portfolio Recovery, Midland Credit, Amazon Logistics DSP, plus a
+  Greenway Apartments demo entry that matches the sample eviction notice).
+  Resolution is curated-first; on a miss, `synthesizeUnknownEntity()` calls
+  Anthropic to produce a conservative profile (typical violations for the
+  entity kind, no fabricated lawsuits) and persists it with
+  `source: "ai_estimated"`. Synthesis errors fall through to an empty row so
+  the pipeline never blocks on the AI call. Replace with
+  CourtListener + OpenCorporates calls behind tokens later.
+- **`otherCases` is anonymized.** The dossier endpoint exposes only
+  `vertical`, `jurisdiction`, and `createdAt` for other Lexor cases against
+  the same adversary — no case ids are returned, even truncated, to avoid
+  leaking cross-user case-participation identifiers.
+- **Pipeline persists `adversaryEntityId` on the case row** at the adversary
+  step (`services/pipeline.ts`); the Adversary tab and `/entity/:id` page hydrate
+  via `GET /api/counsel/adversary/:entityId`.
+- **Search route is registered before `:entityId`** in
+  `routes/counsel/adversary.ts` to avoid Express 5 collision.
+- **"Use this defense" injection is client-side only.** Selected defenses
+  persist in localStorage via a Zustand store
+  (`lib/defenseInjection.ts`) and are appended to the response letter copy /
+  print output. The selector uses a stable `EMPTY` sentinel
+  (`selectInjectedFor`) — without it zustand's reference-equality check trips
+  an infinite render loop in React 19.
+- **Standalone `/entity/:id` reuses `DossierView`** with `hideUseDefense`, so
+  the dossier renders identically with a Copy button instead of inject buttons.

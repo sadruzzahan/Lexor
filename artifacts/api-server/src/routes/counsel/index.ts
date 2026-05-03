@@ -4,8 +4,8 @@ import diagnosticsRouter from "./diagnostics";
 import casesRouter from "./cases";
 import disclosuresRouter from "./disclosures";
 import regulatorsRouter from "./regulators";
+import adversaryRouter from "./adversary";
 import {
-  adversaryRouter,
   mapRouter,
   coalitionsRouter,
   voiceRouter,

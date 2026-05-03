@@ -15,6 +15,7 @@ import { useDocumentTitle } from "@/lib/hooks";
 import { getCase, type CaseRow } from "@/lib/api";
 import { Defense } from "@/components/case/Defense";
 import { CounterAttack } from "@/components/case/CounterAttack";
+import { Adversary } from "@/components/case/Adversary";
 import { useEventStream } from "@/lib/sse";
 import { eventStreamUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -189,7 +190,7 @@ export default function CasePage() {
       <div>
         {tab === "defense" && <Defense row={row} />}
         {tab === "counter" && <CounterAttack row={row} />}
-        {tab === "adversary" && <Deferred title="Adversary Dossier" />}
+        {tab === "adversary" && <Adversary row={row} />}
         {tab === "coalition" && <Deferred title="Coalition Builder" />}
         {tab === "map" && <Deferred title="Predator Map" />}
       </div>
