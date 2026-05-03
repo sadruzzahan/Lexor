@@ -6,8 +6,16 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * Returned by POST /counsel/cases. uploadURL/objectPath are present
+for the file-upload flow; both are null for the inline-text flow
+(sample/synthetic letter), where the server stores the text via
+a /text/<base64> sentinel and the client jumps straight to the
+SSE event stream.
+
+ */
 export interface CreateCaseResult {
   caseId: string;
-  uploadURL: string;
-  objectPath: string;
+  uploadURL?: string | null;
+  objectPath?: string | null;
 }

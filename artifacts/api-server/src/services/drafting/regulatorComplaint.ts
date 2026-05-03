@@ -1,13 +1,23 @@
 import { anthropic } from "@workspace/integrations-anthropic-ai";
 import type { Extraction } from "../vision";
-import type { Violation, AgencyKind } from "../rules";
-import { AGENCY_LABEL, AGENCY_FILE_URL } from "../rules";
+import type { Violation, AgencyKind, AgencyTier } from "../rules";
+import { AGENCY_LABEL, AGENCY_FILE_URL, AGENCY_TIER } from "../rules";
 import { stripUnverifiedCites, findStatutes, enforceCourtFilingPlaceholder } from "../grounding";
 
 export interface RegulatorComplaint {
   agency: AgencyKind;
   agencyLabel: string;
   filingUrl: string;
+  /**
+   * Tier 1 = federal portal w/ structured online form (CFPB, FTC, HUD,
+   * EEOC, DOL-WHD). The UI walks the user through filing in the
+   * agency's portal step by step.
+   *
+   * Tier 2 = no central portal (currently STATE_AG). The UI offers the
+   * user a printable PDF + a deep-link to the agency directory.
+   */
+  tier: AgencyTier;
+  filingMode: "guided-portal" | "pdf-and-deeplink";
   draftHtml: string;
   draftPlainText: string;
   steps: string[];
@@ -76,10 +86,13 @@ Draft the complaint now. JSON only.`;
   const { cleaned: stripCleaned, stripped } = stripUnverifiedCites(json.body, verified);
   const safeBody = enforceCourtFilingPlaceholder(stripCleaned);
 
+  const tier = AGENCY_TIER[opts.agency];
   return {
     agency: opts.agency,
     agencyLabel: AGENCY_LABEL[opts.agency],
     filingUrl: AGENCY_FILE_URL[opts.agency],
+    tier,
+    filingMode: tier === 1 ? "guided-portal" : "pdf-and-deeplink",
     draftPlainText: safeBody,
     draftHtml: bodyToHtml(json.subject, safeBody),
     steps:

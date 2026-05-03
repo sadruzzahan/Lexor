@@ -68,7 +68,10 @@ router.post("/cases", ipLimit, async (req: Request, res: Response) => {
       .catch((err) =>
         req.log.error({ err, caseId: row.id }, "pipeline crashed"),
       );
-    res.json({ caseId: row.id });
+    // Inline-text mode: no presigned upload, no object path. We return
+    // the same shape but with nulls so the OpenAPI CreateCaseResult
+    // contract holds (uploadURL/objectPath nullable).
+    res.json({ caseId: row.id, uploadURL: null, objectPath: null });
     return;
   }
 

@@ -69,11 +69,15 @@ export const CreateCaseBody = zod.object({
   fileSize: zod.number().min(1).nullish(),
 });
 
-export const CreateCaseResponse = zod.object({
-  caseId: zod.string().uuid(),
-  uploadURL: zod.string().url(),
-  objectPath: zod.string(),
-});
+export const CreateCaseResponse = zod
+  .object({
+    caseId: zod.string().uuid(),
+    uploadURL: zod.string().url().nullish(),
+    objectPath: zod.string().nullish(),
+  })
+  .describe(
+    "Returned by POST \/counsel\/cases. uploadURL\/objectPath are present\nfor the file-upload flow; both are null for the inline-text flow\n(sample\/synthetic letter), where the server stores the text via\na \/text\/<base64> sentinel and the client jumps straight to the\nSSE event stream.\n",
+  );
 
 /**
  * @summary Mark upload complete and trigger pipeline

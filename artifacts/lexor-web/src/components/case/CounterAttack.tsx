@@ -69,11 +69,20 @@ export function CounterAttack({ row }: { row: CaseRow }) {
                     onClick={() => setActive(complaint)}
                     className="shimmer-btn rounded-base px-3 py-1.5 text-xs font-medium"
                   >
-                    File complaint with {complaint.agency}
+                    {complaint.tier === 2
+                      ? `Generate PDF for ${complaint.agency}`
+                      : `File complaint with ${complaint.agency}`}
                   </button>
                   <span className="text-xs text-fg-subtle">
                     {complaint.agencyLabel}
                   </span>
+                  {complaint.tier && (
+                    <span className="px-2 py-0.5 text-[10px] uppercase tracking-wider rounded-base border border-border-strong text-fg-subtle">
+                      {complaint.tier === 1
+                        ? "Tier 1 · guided portal"
+                        : "Tier 2 · PDF + mail"}
+                    </span>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -151,12 +160,29 @@ function ComplaintModal({
           </button>
         </div>
 
-        <div className="px-6 py-4 border-b border-border bg-warning/10 text-xs text-warning">
-          <strong>You are filing this complaint personally.</strong> Lexor is
-          preparing the document at your direction; we don't submit on your
-          behalf. Citations come from a curated, hand-verified statute corpus
-          (CA / TX / NY plus federal FDCPA + FLSA) — confirm the contents are
-          accurate and consider consulting a licensed attorney before you file.
+        <div className="px-6 py-4 border-b border-border bg-warning/10 text-xs text-warning space-y-2">
+          <p>
+            <strong>You are filing this complaint personally.</strong> Lexor is
+            preparing the document at your direction; we don't submit on your
+            behalf. Citations come from a curated, hand-verified statute corpus
+            (CA / TX / NY plus federal FDCPA + FLSA) — confirm the contents are
+            accurate and consider consulting a licensed attorney before you file.
+          </p>
+          {complaint.tier === 1 ? (
+            <p>
+              <strong>Tier 1 · guided portal.</strong> {complaint.agency} runs
+              a structured online complaint form. Use <em>Copy text</em>, then
+              click <em>Open {complaint.agency} portal</em> and paste each
+              section into the matching field.
+            </p>
+          ) : complaint.tier === 2 ? (
+            <p>
+              <strong>Tier 2 · PDF + mail.</strong> {complaint.agency} doesn't
+              have a single national portal. Use <em>Download PDF</em>, then
+              follow the directory link to find your state office's mailing
+              address.
+            </p>
+          ) : null}
         </div>
 
         <div className="px-6 py-5">

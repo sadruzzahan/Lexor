@@ -490,11 +490,17 @@ components:
         fileSize: { type: integer, minimum: 1, nullable: true }
     CreateCaseResult:
       type: object
-      required: [caseId, uploadURL, objectPath]
+      required: [caseId]
+      description: |
+        Returned by POST /counsel/cases. uploadURL/objectPath are present
+        for the file-upload flow; both are null for the inline-text flow
+        (sample/synthetic letter), where the server stores the text via
+        a /text/<base64> sentinel and the client jumps straight to the
+        SSE event stream.
       properties:
         caseId: { type: string, format: uuid }
-        uploadURL: { type: string, format: uri }
-        objectPath: { type: string }
+        uploadURL: { type: string, format: uri, nullable: true }
+        objectPath: { type: string, nullable: true }
 
     FinalizeCaseRequest:
       type: object

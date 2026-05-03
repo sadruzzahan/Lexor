@@ -41,6 +41,29 @@ export const AGENCY_FILE_URL: Record<AgencyKind, string> = {
   DOL_WHD: "https://www.dol.gov/agencies/whd/contact/complaints",
 };
 
+/**
+ * Filing-tier classification per build plan §6.2.
+ *
+ * tier 1 — agency operates a structured online complaint form we can
+ *   guide the user through field-by-field (auto-fill via copy/paste of
+ *   each section). The "File complaint" CTA jumps to the form and our
+ *   modal walks them through the steps in order.
+ *
+ * tier 2 — no central federal portal (e.g. State AG, where the user has
+ *   to find their state's office first). The expected flow is a
+ *   one-click PDF the user prints and mails, plus a deep-link to the
+ *   directory so they can locate the right office.
+ */
+export type AgencyTier = 1 | 2;
+export const AGENCY_TIER: Record<AgencyKind, AgencyTier> = {
+  HUD: 1,
+  CFPB: 1,
+  FTC: 1,
+  EEOC: 1,
+  DOL_WHD: 1,
+  STATE_AG: 2,
+};
+
 export function runRules(
   extraction: Extraction,
   vertical: Vertical,

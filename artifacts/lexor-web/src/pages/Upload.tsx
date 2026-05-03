@@ -68,6 +68,9 @@ export default function UploadPage() {
     setBusy(true);
     try {
       const c = await createCase();
+      if (!c.uploadURL || !c.objectPath) {
+        throw new Error("Server did not return an upload URL — try again.");
+      }
       await uploadToPresignedUrl(c.uploadURL, file, file.type);
       const buf = await file.arrayBuffer();
       const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", buf)))

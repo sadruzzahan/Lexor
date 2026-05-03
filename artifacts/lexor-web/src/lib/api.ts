@@ -13,8 +13,8 @@ const API = "/api/counsel";
 
 export interface CreateCaseResponse {
   caseId: string;
-  uploadURL: string;
-  objectPath: string;
+  uploadURL: string | null;
+  objectPath: string | null;
 }
 
 export async function createCase(opts?: {
@@ -89,6 +89,8 @@ export interface RegulatorComplaint {
   agency: string;
   agencyLabel: string;
   filingUrl: string;
+  tier?: 1 | 2;
+  filingMode?: "guided-portal" | "pdf-and-deeplink";
   draftHtml: string;
   draftPlainText: string;
   steps: string[];

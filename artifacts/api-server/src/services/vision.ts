@@ -66,13 +66,60 @@ Output JSON only, no preamble, matching this TypeScript shape:
  * a plaintext fallback when the upload is text/PDF that we've already
  * extracted to text upstream.
  *
- * DRIFT: build plan called for a GPT-4o handwriting fallback. Anthropic
- * vision handles printed legal correspondence reliably; the fallback can
- * land with the OCR-quality polish task in the post-MVP pass.
+ * Two-pass design: first call uses the standard prompt (works well on
+ * printed letters). If the result has too little raw text — typically
+ * handwritten or low-contrast scans — we fall back to a more aggressive
+ * second-pass prompt that asks the model to do best-effort handwriting
+ * OCR before re-extracting the structured fields. Build plan §3.2 calls
+ * for a GPT-4o second pass; we use Anthropic for both passes today
+ * because OpenAI isn't wired into the workspace integrations. Swap is
+ * isolated to the second `runVisionPass(...)` call below — replace its
+ * model with GPT-4o when the OpenAI integration lands.
  */
+const HANDWRITING_PROMPT = `${USER_INSTRUCTIONS}
+
+This image may be handwritten, faxed, or low-contrast. Take extra care:
+- Spell out each line you can see, even partial words. Use [illegible]
+  only for runs you truly cannot read.
+- If multiple pages are visible, transcribe each in order with a blank
+  line between them.
+- Preserve numbers, dollar amounts, and dates exactly as written.
+- If you can read fewer than 40 characters, return rawText="" and we
+  will surface a friendly upload-quality error to the user.`;
+
+const MIN_OCR_CHARS = 80;
+
 export async function extractFromImage(opts: {
   base64: string;
   mediaType: "image/png" | "image/jpeg" | "image/webp";
+}): Promise<Extraction> {
+  const first = await runVisionPass({
+    base64: opts.base64,
+    mediaType: opts.mediaType,
+    instructions: USER_INSTRUCTIONS,
+  });
+  if (first.rawText.trim().length >= MIN_OCR_CHARS) return first;
+  logger.info(
+    { firstLen: first.rawText.length },
+    "vision first pass low-confidence — running handwriting fallback",
+  );
+  const second = await runVisionPass({
+    base64: opts.base64,
+    mediaType: opts.mediaType,
+    instructions: HANDWRITING_PROMPT,
+  });
+  if (second.rawText.trim().length < 40) {
+    throw new Error(
+      "We couldn't read this image clearly — try a sharper photo with the whole page in frame.",
+    );
+  }
+  return second;
+}
+
+async function runVisionPass(opts: {
+  base64: string;
+  mediaType: "image/png" | "image/jpeg" | "image/webp";
+  instructions: string;
 }): Promise<Extraction> {
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-5",
@@ -86,7 +133,7 @@ export async function extractFromImage(opts: {
             type: "image",
             source: { type: "base64", media_type: opts.mediaType, data: opts.base64 },
           },
-          { type: "text", text: USER_INSTRUCTIONS },
+          { type: "text", text: opts.instructions },
         ],
       },
     ],
