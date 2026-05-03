@@ -44,18 +44,28 @@ Use the **Publish** button in the workspace (the agent will also surface a publi
 suggestion). The platform builds both artifacts (`api-server` and `lexor-web`), provisions
 TLS, and exposes the app on a `*.replit.app` domain (or your custom domain).
 
-## 3 · Run the production database migration
+## 3 · Production database schema
 
-After the first deploy succeeds, open a workspace shell and run the migrations against the
-production database — this creates the `cases`, `pins`, `inbox_alerts`, and pgvector
-indexes on the live DB:
+Replit's managed Postgres applies the dev schema to the production database
+**automatically as part of Publish** — no manual `migrate` step is required.
+The Publish flow:
 
-```bash
-DATABASE_URL="$PROD_DATABASE_URL" pnpm --filter @workspace/db run migrate
-```
+1. Diffs the development DB against production.
+2. Surfaces any column/table renames in the Publish UI for you to confirm
+   (without confirmation a rename is treated as drop + add and would lose data).
+3. Applies the resulting SQL to the production database during the publish.
 
-(Use the production `DATABASE_URL` shown in the Deployments → Database tab. The
-`migrate` script also enables the `pgvector` extension before applying migrations.)
+For Lexor this creates the `cases`, `pins`, `inbox_alerts`, and pgvector
+indexes on the live DB the first time you Publish. The pgvector extension
+is enabled automatically by `lib/db/scripts/setup-pgvector.ts` whenever
+`pnpm --filter @workspace/db run push` runs (which the post-merge setup
+script invokes for the dev DB).
+
+If after Publish the deployed app reports `relation does not exist` or a
+missing column, re-run Publish — that's the supported way to push schema to
+prod. **Do not** run `drizzle-kit migrate` or `pnpm --filter @workspace/db
+run migrate` against the production DATABASE_URL by hand; that bypasses the
+publish-time diff and rename confirmation and is unsafe.
 
 ## 4 · Wire Twilio webhooks
 
