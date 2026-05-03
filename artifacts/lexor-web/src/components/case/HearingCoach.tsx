@@ -46,6 +46,10 @@ const DISCLOSURE_VERSION = "hearing-coach-v1";
 const SILENCE_GAP_MS = 1200; // user-side pause before we consider whispering
 const POLL_INTERVAL_MS = 3000; // hard floor between LLM hits
 const MAX_TRANSCRIPT_CHARS = 6000;
+// Per spec: only consult the brain on segments we're at least 70% sure
+// we transcribed correctly. Whispers built on garbled input would be
+// worse than silence.
+const MIN_CONFIDENCE = 0.7;
 
 // SpeechRecognition lives behind a vendor prefix on most browsers.
 type SpeechRecognitionLike = {
@@ -84,6 +88,8 @@ interface TranscriptSegment {
   speaker: "user" | "opposing" | "court";
   text: string;
   isFinal: boolean;
+  /** STT confidence in [0,1] for the final alternative. 0 for interim. */
+  confidence: number;
   ts: number;
 }
 
@@ -180,8 +186,23 @@ export function HearingCoach({ row }: { row: CaseRow }) {
     // don't want to whisper while they're still speaking.
     if (now - lastFinalAtRef.current < SILENCE_GAP_MS) return;
 
-    const transcript = segments
-      .filter((s) => s.isFinal)
+    // Confidence gate (spec): require the most recent final segment to
+    // have crossed MIN_CONFIDENCE before consulting the brain. Garbled
+    // STT → silence rather than acting on a misheard line. Browsers
+    // that don't expose a confidence value report 0 — in that case we
+    // accept the segment if at least one earlier final segment in this
+    // session crossed the threshold (proves the field is populated)
+    // OR if the recent text looks substantial (>40 chars).
+    const finals = segments.filter((s) => s.isFinal);
+    const lastFinal = finals[finals.length - 1];
+    if (!lastFinal) return;
+    const seenConfidence = finals.some((s) => s.confidence > 0);
+    const meetsConfidence =
+      lastFinal.confidence >= MIN_CONFIDENCE ||
+      (!seenConfidence && lastFinal.text.length > 40);
+    if (!meetsConfidence) return;
+
+    const transcript = finals
       .map((s) => `${s.speaker.toUpperCase()}: ${s.text}`)
       .join("\n")
       .slice(-MAX_TRANSCRIPT_CHARS);
@@ -258,6 +279,11 @@ export function HearingCoach({ row }: { row: CaseRow }) {
         const alt = res[0];
         const text = (alt.transcript ?? "").trim();
         if (!text) continue;
+        const confidence = res.isFinal
+          ? typeof alt.confidence === "number"
+            ? alt.confidence
+            : 0
+          : 0;
         const now = Date.now();
         // Heuristic diarization: a final segment after >2.5s of silence
         // is "the courtroom" (judge/opposing); otherwise it's the user.
@@ -272,7 +298,7 @@ export function HearingCoach({ row }: { row: CaseRow }) {
           if (last && !last.isFinal && last.speaker === speaker) {
             return [
               ...cur.slice(0, -1),
-              { ...last, text, isFinal: res.isFinal, ts: now },
+              { ...last, text, isFinal: res.isFinal, confidence, ts: now },
             ];
           }
           return [
@@ -282,6 +308,7 @@ export function HearingCoach({ row }: { row: CaseRow }) {
               speaker,
               text,
               isFinal: res.isFinal,
+              confidence,
               ts: now,
             },
           ];
@@ -368,14 +395,21 @@ export function HearingCoach({ row }: { row: CaseRow }) {
   }, []);
 
   async function acceptDisclaimer() {
-    setAcked(true);
-    setShowDisclaimer(false);
+    // Mandatory: the session does NOT start until the acknowledgment
+    // has been recorded server-side. If the network call fails the
+    // user stays on the disclaimer with a retry toast — the audit log
+    // must contain a row for every coaching session that runs.
     const sid = getOrCreateSessionId();
     try {
       await ackDisclosure(DISCLOSURE_VERSION, sid);
     } catch {
-      /* logging-only — don't block the user from starting */
+      toast.error(
+        "We couldn't log your acknowledgement. Check your connection and try again.",
+      );
+      return;
     }
+    setAcked(true);
+    setShowDisclaimer(false);
     void startListening();
   }
 
@@ -622,9 +656,10 @@ export function HearingCoach({ row }: { row: CaseRow }) {
       </div>
 
       <p className="text-[10px] text-fg-subtle">
-        Hearing Coach is a personal preparation tool. Audio is transcribed
-        in your browser and is never sent to a server. Recording laws vary
-        by state — many require all parties' consent. You are responsible
+        Hearing Coach is a personal preparation tool. Lexor receives only
+        the text transcript — your browser's speech recognition may route
+        audio through your browser vendor's service. Recording laws vary
+        by state; many require all parties' consent. You are responsible
         for compliance.
       </p>
 
@@ -689,9 +724,12 @@ function DisclaimerModal({
                 AI-generated suggestions, not legal advice.
               </li>
               <li>
-                Audio is transcribed inside your browser and is{" "}
-                <strong>never recorded or uploaded</strong>. Only the text
-                transcript is sent to generate cues.
+                <strong>Lexor never receives or stores your audio.</strong>{" "}
+                Only the text transcript is sent to our servers to generate
+                cues. Note: your browser's built-in transcription
+                (SpeechRecognition) may route audio through your browser
+                vendor's speech service (e.g. Google for Chrome) — review
+                your browser's privacy policy if that matters to you.
               </li>
               <li>
                 Recording laws vary by state. Many require everyone in the
