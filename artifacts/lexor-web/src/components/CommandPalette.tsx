@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   Home,
   Upload,
+  Inbox,
 } from "lucide-react";
 
 export function CommandPalette() {
@@ -77,6 +78,7 @@ export function CommandPalette() {
             <Item icon={<MapPin className="h-4 w-4" />} onSelect={() => go("/map")}>{t("nav.map")}</Item>
             <Item icon={<Users className="h-4 w-4" />} onSelect={() => go("/coalition/all")}>{t("nav.coalitions")}</Item>
             <Item icon={<PhoneCall className="h-4 w-4" />} onSelect={() => go("/voice")}>{t("nav.voice")}</Item>
+            <Item icon={<Inbox className="h-4 w-4" />} onSelect={() => go("/settings")}>Inbox Sentinel</Item>
           </Command.Group>
 
           <Command.Group heading={t("cmdk.group.actions")} className="px-1 py-1 text-[11px] uppercase tracking-wider text-fg-subtle">

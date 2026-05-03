@@ -19,6 +19,7 @@ import { Soon } from "@/pages/Soon";
 import EntityPage from "@/pages/Entity";
 import MapPage from "@/pages/Map";
 import VoicePage from "@/pages/Voice";
+import SettingsPage from "@/pages/Settings";
 import CoalitionPage from "@/pages/Coalition";
 import NotFound from "@/pages/not-found";
 
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/coalition/:id" component={CoalitionPage} />
       <Route path="/entity/:id" component={EntityPage} />
       <Route path="/voice" component={VoicePage} />
+      <Route path="/settings" component={SettingsPage} />
       <Route path="/rights/:vertical">
         <Soon titleKey="page.rights.title" Icon={Scale} />
       </Route>

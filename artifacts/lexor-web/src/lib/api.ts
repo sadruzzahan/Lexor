@@ -556,3 +556,132 @@ export async function runTrial(
   const j = (await r.json()) as { trial: TrialView };
   return j.trial;
 }
+
+// ----- Inbox Sentinel (Feature 8) -----
+
+export type InboxCategory =
+  | "eviction"
+  | "court_summons"
+  | "debt"
+  | "irs"
+  | "ice"
+  | "employment";
+
+export interface InboxStatus {
+  connectorReady: boolean;
+  connectedEmail: string | null;
+  watch: {
+    enabled: boolean;
+    phoneNumber: string | null;
+    lastHistoryId: string | null;
+    createdAt: string;
+  } | null;
+  twilioConfigured: boolean;
+}
+
+export interface InboxAlert {
+  id: string;
+  category: InboxCategory;
+  status: "fired" | "dispatched" | "reviewed" | "sent" | "dismissed" | "failed";
+  senderDisplay: string;
+  subject: string;
+  gist: string;
+  deadlineIso: string | null;
+  draftedReply: string | null;
+  callSid: string | null;
+  firedAt: string;
+  dispatchedAt: string | null;
+  resolvedAt: string | null;
+  caseId: string | null;
+}
+
+export async function getInboxStatus(): Promise<InboxStatus> {
+  const r = await fetch(`${API}/inbox/status`);
+  if (!r.ok) throw new Error(`getInboxStatus ${r.status}`);
+  return r.json();
+}
+
+export async function enableInboxWatch(opts: {
+  phoneNumber?: string | null;
+}): Promise<void> {
+  const r = await fetch(`${API}/inbox/enable`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`enableInboxWatch ${r.status} ${t}`);
+  }
+}
+
+export async function disableInboxWatch(): Promise<void> {
+  const r = await fetch(`${API}/inbox/disable`, { method: "POST" });
+  if (!r.ok) throw new Error(`disableInboxWatch ${r.status}`);
+}
+
+export async function listInboxAlerts(): Promise<InboxAlert[]> {
+  const r = await fetch(`${API}/inbox/alerts`);
+  if (!r.ok) throw new Error(`listInboxAlerts ${r.status}`);
+  const j = (await r.json()) as { alerts: InboxAlert[] };
+  return j.alerts;
+}
+
+export interface InboxIngestResult {
+  alertId: string | null;
+  category: InboxCategory | null;
+  confidence: number;
+  gist: string;
+  deadlineIso: string | null;
+  matchedKeywords: string[];
+  dispatch: {
+    channel: "voice" | "in_app";
+    callSid: string | null;
+    dispatchLatencyMs: number;
+  } | null;
+}
+
+export async function ingestTestEmail(payload: {
+  fromDisplay: string;
+  fromAddress: string;
+  subject: string;
+  bodyText: string;
+}): Promise<InboxIngestResult> {
+  const r = await fetch(`${API}/inbox/ingest`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`ingestTestEmail ${r.status} ${t}`);
+  }
+  return r.json();
+}
+
+export async function resolveInboxAlert(
+  alertId: string,
+  status: "dismissed" | "reviewed",
+): Promise<void> {
+  const r = await fetch(`${API}/inbox/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alertId, status }),
+  });
+  if (!r.ok) throw new Error(`resolveInboxAlert ${r.status}`);
+}
+
+export async function sendInboxReply(
+  alertId: string,
+  body?: string,
+): Promise<void> {
+  const r = await fetch(`${API}/inbox/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ alertId, body }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`sendInboxReply ${r.status} ${t}`);
+  }
+}

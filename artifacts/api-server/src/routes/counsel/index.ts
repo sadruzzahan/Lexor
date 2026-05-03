@@ -12,6 +12,7 @@ import whatsappRouter from "./whatsapp";
 import coalitionsRouter from "./coalitions";
 import trialsRouter from "./trials";
 import coachRouter from "./coach";
+import inboxRouter from "./inbox";
 
 const router: IRouter = Router();
 
@@ -31,5 +32,6 @@ router.use("/whatsapp", whatsappRouter);
 router.use(coalitionsRouter);
 router.use(trialsRouter);
 router.use(coachRouter);
+router.use(inboxRouter);
 
 export default router;

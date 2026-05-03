@@ -3,6 +3,7 @@ import { WebSocketServer } from "ws";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { bridgeTwilioToRealtime } from "./services/voice/realtimeBridge";
+import { startInboxScheduler } from "./services/inbox/scheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -58,6 +59,8 @@ voiceWss.on("connection", (ws) => {
 
 server.listen(port, () => {
   logger.info({ port, voiceWsPath: VOICE_WS_PATH }, "Server listening");
+  // Inbox Sentinel polling loop. No-op when Gmail scope insufficient.
+  startInboxScheduler();
 });
 
 server.on("error", (err) => {

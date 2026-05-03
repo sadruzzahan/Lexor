@@ -9,3 +9,4 @@ export * from "./disclosures";
 export * from "./coalitionVotes";
 export * from "./notifications";
 export * from "./trials";
+export * from "./inbox";

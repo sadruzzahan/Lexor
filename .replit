@@ -14,6 +14,7 @@ runButton = "Project"
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
+integrations = ["google-mail:1.0.0"]
 
 [postMerge]
 path = "scripts/post-merge.sh"
@@ -35,6 +36,9 @@ externalPort = 3000
 
 [userenv.shared]
 VITE_CLERK_PUBLISHABLE_KEY = "pk_test_am9pbnQtYnVsbGZyb2ctNzIuY2xlcmsuYWNjb3VudHMuZGV2JA"
+
+[userenv.development]
+INTERNAL_TEST_SECRET = "dev-acceptance-secret-only-not-prod"
 
 [nix]
 channel = "stable-25_05"
