@@ -29,9 +29,8 @@ export const caseVertical = pgEnum("case_vertical", [
   "other",
 ]);
 
-// Note: text-embedding-3-large can be configured to 1536 dims so the column
-// fits pgvector's 2000-dim ivfflat index limit (3072 dims would require
-// halfvec/HNSW). We standardize on 1536.
+// Cohere embed-english-v3.0 produces 1024-dim vectors, which comfortably
+// fits pgvector's 2000-dim ivfflat index limit. Standardized on 1024.
 export const casesTable = pgTable(
   "cases",
   {
@@ -51,7 +50,7 @@ export const casesTable = pgTable(
       () => entitiesTable.id,
       { onDelete: "set null" },
     ),
-    embedding: vector("embedding", { dimensions: 1536 }),
+    embedding: vector("embedding", { dimensions: 1024 }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
