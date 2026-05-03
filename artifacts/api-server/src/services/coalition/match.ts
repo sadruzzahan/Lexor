@@ -101,6 +101,28 @@ export async function matchOrFormCoalition(
     .limit(1);
 
   if (existing) {
+    // Require similarity to at least one current member of the existing
+    // coalition before attaching — same adversary alone is not enough
+    // signal to risk pulling an unrelated letter into a class.
+    const memberRows = await db
+      .select({ caseId: coalitionMembersTable.caseId })
+      .from(coalitionMembersTable)
+      .where(eq(coalitionMembersTable.coalitionId, existing.id));
+    const memberIdSet = new Set(memberRows.map((r) => r.caseId));
+    const isSimilarToMember = peers.some(
+      (p) => memberIdSet.has(p.id) && p.similarity >= SIM_THRESHOLD,
+    );
+    if (!isSimilarToMember) {
+      logger.info(
+        { coalitionId: existing.id, caseId },
+        "case shares adversary but is below similarity threshold to coalition members; not attaching",
+      );
+      return {
+        coalitionId: null,
+        matchedCaseIds: [],
+        reason: "below_threshold",
+      };
+    }
     await db
       .insert(coalitionMembersTable)
       .values({ coalitionId: existing.id, caseId: self.id, hasOptedIn: false })

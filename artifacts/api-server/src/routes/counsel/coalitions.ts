@@ -389,21 +389,39 @@ router.post(
 
 /**
  * POST /counsel/coalitions/:id/finalize
- * Plurality-rule winner selection: the bid with the most votes wins. The
- * winning bid is recorded on the coalition row, status flips to "matched",
- * and we release the contact list (caseId + Clerk userId) of every
- * opted-in member to the winning lawyer's email. The release is audit-
- * logged as a disclosure row (version "coalition-winner-release-v1") so
- * we have a permanent record of which user opted into which contact-share.
+ * Plurality-rule winner selection. PRIVILEGED: requires the
+ * `LEXOR_ADMIN_TOKEN` env var presented as `x-admin-token` (operator-
+ * triggered or scheduled job only). Never callable by end users.
  *
- * Anyone can trigger finalize once enough votes are in (votes themselves
- * are ownership-checked at /vote time, so plurality is already gated).
+ * Effects:
+ *   - records winningBidId + finalizedAt on the coalition
+ *   - flips status → "matched"
+ *   - audit-logs one disclosure row per consenting member
+ *     (version "coalition-winner-release-v1") so the contact-release is
+ *     auditable
+ *   - delivers the consenting-member contact list to the winning lawyer
+ *     via the controlled in-app `notifications` channel (kind
+ *     coalition_update); does NOT return PII in the HTTP response
  */
 router.post(
   "/coalitions/:id/finalize",
   async (req: Request, res: Response) => {
     const id = String(req.params.id ?? "");
     assertUuid(id, "coalitionId");
+
+    // Privileged endpoint. We require the operator token; if it is not
+    // configured at all the endpoint is locked, refusing finalize until
+    // the operator sets one. This prevents accidental public access in
+    // any environment.
+    const expected = process.env.LEXOR_ADMIN_TOKEN;
+    const provided = req.header("x-admin-token");
+    if (!expected || !provided || provided !== expected) {
+      throw new HttpError(
+        403,
+        "forbidden",
+        "Coalition finalize is operator-only.",
+      );
+    }
 
     const [coalition] = await db
       .select()
@@ -486,26 +504,43 @@ router.post(
       );
     }
 
+    // Deliver the contact list through the controlled in-app
+    // notifications channel — addressed to the winning lawyer's email,
+    // not exposed in the HTTP response. The notifications.payload column
+    // is server-side only and is read by an operator-side delivery job.
+    await db.insert(notificationsTable).values({
+      caseId: null,
+      userId: null,
+      kind: "coalition_update",
+      channel: "email",
+      payload: {
+        to: winningBid.lawyerEmail,
+        subject: `Coalition handoff (${id.slice(0, 8)})`,
+        coalitionId: id,
+        bidId: winningBid.id,
+        contacts: consented,
+        status: process.env.LEXOR_EMAIL_PROVIDER
+          ? "queued"
+          : "queued_no_provider",
+      },
+    });
+
     req.log.info(
       {
         coalitionId: id,
         winningBidId: winningBid.id,
-        lawyerEmail: winningBid.lawyerEmail,
         releasedCount: consented.length,
       },
-      "coalition finalized; contact list released to winning lawyer",
+      "coalition finalized; contact list queued for winning lawyer",
     );
 
+    // Response is intentionally minimal — no PII, no contact list.
     res.json({
       ok: true,
-      winningBid: {
-        id: winningBid.id,
-        lawyerName: winningBid.lawyerName,
-        lawyerEmail: winningBid.lawyerEmail,
-        contingencyPercent: winningBid.contingencyPercent,
-      },
-      releasedTo: winningBid.lawyerEmail,
-      consentedMembers: consented,
+      coalitionId: id,
+      winningBidId: winningBid.id,
+      lawyerName: winningBid.lawyerName,
+      releasedCount: consented.length,
     });
   },
 );

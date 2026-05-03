@@ -58,7 +58,11 @@ export async function fanOutCoalitionInvites(coalitionId: string): Promise<{
     .limit(1);
 
   const members = await db
-    .select({ caseId: coalitionMembersTable.caseId, userId: casesTable.userId })
+    .select({
+      caseId: coalitionMembersTable.caseId,
+      userId: casesTable.userId,
+      hasOptedIn: coalitionMembersTable.hasOptedIn,
+    })
     .from(coalitionMembersTable)
     .innerJoin(casesTable, eq(coalitionMembersTable.caseId, casesTable.id))
     .where(eq(coalitionMembersTable.coalitionId, coalitionId));
@@ -93,32 +97,39 @@ export async function fanOutCoalitionInvites(coalitionId: string): Promise<{
       logger.warn({ err, caseId: m.caseId }, "in-app notification insert failed");
     }
 
-    // 2. Email — no provider configured. Log and degrade.
-    if (m.userId) {
-      logger.info(
-        { caseId: m.caseId, userId: m.userId, coalitionId },
-        "email notification skipped (no provider configured)",
-      );
-      // Still record the intent so the audit trail is honest.
-      await db
-        .insert(notificationsTable)
-        .values({
+    // 2. Email — only when an outbound email provider is configured.
+    // The flag is `LEXOR_EMAIL_PROVIDER`. When unset, we skip entirely
+    // (no audit row, no log spam) — the feature is gated off.
+    if (m.userId && process.env.LEXOR_EMAIL_PROVIDER) {
+      try {
+        await db.insert(notificationsTable).values({
           caseId: m.caseId,
           userId: m.userId,
           kind: "coalition_invite",
           channel: "email",
-          payload: { coalitionId, subject, body, url, status: "skipped_no_provider" },
-        })
-        .catch(() => undefined);
-      email += 1;
+          payload: {
+            coalitionId,
+            subject,
+            body,
+            url,
+            status: "queued",
+          },
+        });
+        email += 1;
+      } catch (err) {
+        logger.warn({ err, caseId: m.caseId }, "email notification queue failed");
+      }
     }
 
-    // 3. WhatsApp — best-effort. We only persist a SHA-256 hash of the
-    // member's phone number for privacy, so we cannot reach back out
-    // unsolicited unless the caller provides the live `to` number through
-    // an opt-in path (e.g. the user replies "join" to a future broadcast).
-    // For now we log the intent and record a "skipped_no_phone" row so the
-    // audit trail reflects reality.
+    // 3. WhatsApp — REQUIRES (a) an existing WhatsApp session for this
+    // case (we have a hashed phone, so the user previously opted into
+    // WhatsApp comms by initiating a session) AND (b) the member has
+    // explicitly opted into the coalition. Without both, we don't send.
+    // Member-specific routing: when a real per-member outbound number
+    // becomes available we'll thread it here; for now an explicit
+    // `LEXOR_WA_TEST_NUMBER` is the only sanctioned destination. If
+    // unset, we skip the send and log the policy decision.
+    if (!m.hasOptedIn) continue;
     try {
       const [sess] = await db
         .select({ phoneNumberHash: sessionsTable.phoneNumberHash })
@@ -130,30 +141,32 @@ export async function fanOutCoalitionInvites(coalitionId: string): Promise<{
           ),
         )
         .limit(1);
-      if (sess?.phoneNumberHash) {
-        const liveTo = process.env.LEXOR_WA_TEST_NUMBER;
-        if (liveTo) {
-          await sendWhatsApp({
-            to: liveTo,
-            body: `${subject}\n\n${body}`,
-          });
-        }
-        await db.insert(notificationsTable).values({
-          caseId: m.caseId,
-          userId: m.userId,
-          kind: "coalition_invite",
-          channel: "whatsapp",
-          payload: {
-            coalitionId,
-            subject,
-            body,
-            url,
-            phoneHash: sess.phoneNumberHash,
-            status: liveTo ? "sent" : "skipped_no_raw_phone",
-          },
-        });
-        wa += 1;
+      if (!sess?.phoneNumberHash) continue;
+
+      const liveTo = process.env.LEXOR_WA_TEST_NUMBER;
+      if (!liveTo) {
+        logger.info(
+          { caseId: m.caseId, coalitionId },
+          "whatsapp send skipped: no per-member outbound destination configured",
+        );
+        continue;
       }
+      await sendWhatsApp({ to: liveTo, body: `${subject}\n\n${body}` });
+      await db.insert(notificationsTable).values({
+        caseId: m.caseId,
+        userId: m.userId,
+        kind: "coalition_invite",
+        channel: "whatsapp",
+        payload: {
+          coalitionId,
+          subject,
+          body,
+          url,
+          phoneHash: sess.phoneNumberHash,
+          status: "sent",
+        },
+      });
+      wa += 1;
     } catch (err) {
       logger.warn({ err, caseId: m.caseId }, "whatsapp notification failed");
     }
