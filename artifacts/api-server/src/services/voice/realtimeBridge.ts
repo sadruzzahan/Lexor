@@ -394,13 +394,22 @@ export function bridgeTwilioToRealtime(twilioWs: WebSocket): void {
               callSid?: string;
               customParameters?: {
                 from?: string;
+                to?: string;
                 lang?: string;
                 alertId?: string;
+                direction?: string;
               };
             }
           | undefined;
         streamSid = start?.streamSid ?? null;
-        callerPhone = start?.customParameters?.from ?? null;
+        const fromParam = start?.customParameters?.from ?? null;
+        const toParam = start?.customParameters?.to ?? null;
+        const direction = start?.customParameters?.direction ?? "inbound";
+        // Outbound calls (Inbox Sentinel dispatch): Twilio's From is our
+        // Twilio caller-ID and To is the user we're calling. Bind the
+        // user's phone (To) so open_case_on_device texts the right
+        // person. Inbound calls: From is the caller, To is our number.
+        callerPhone = direction === "outbound" ? toParam : fromParam;
         callerLang = start?.customParameters?.lang ?? "en";
         const alertIdParam = start?.customParameters?.alertId ?? "";
         if (/^[0-9a-f-]{36}$/i.test(alertIdParam)) {

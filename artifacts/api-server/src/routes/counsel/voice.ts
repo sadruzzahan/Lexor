@@ -22,11 +22,15 @@ router.post(
   (req: Request, res: Response) => {
     const host = req.get("host") ?? "";
     const from = typeof req.body?.From === "string" ? req.body.From : "";
-    // Best-effort language hint from caller country code — gives the
-    // realtime bridge a deterministic source for the FIRST disclaimer turn
-    // before the caller speaks. Model still switches if the caller talks
-    // in a different language.
-    const lang = guessLangFromE164(from);
+    const to = typeof req.body?.To === "string" ? req.body.To : "";
+    // For OUTBOUND calls (Inbox Sentinel dispatch), Twilio sets
+    // From = our Twilio number and To = the user's phone. For INBOUND
+    // calls, From = the user's phone and To = our Twilio number. We
+    // always forward BOTH so the realtime bridge can pick the right
+    // one as the user-phone for SMS deeplinks. The dispatcher signals
+    // direction via the alertId query param; presence of it means
+    // outbound-to-user.
+    const lang = guessLangFromE164(from || to);
     // Inbox Sentinel preload: when the dispatcher places the outbound
     // call it appends `?alertId=<uuid>` to this webhook URL. We pass it
     // through as a stream <Parameter> so the realtime bridge can fetch
@@ -36,13 +40,15 @@ router.post(
     const alertId = /^[0-9a-f-]{36}$/i.test(alertIdRaw) ? alertIdRaw : "";
     const wsUrl = `wss://${host}/api/counsel/voice/stream`;
     const alertParam = alertId
-      ? `\n      <Parameter name="alertId" value="${escapeXml(alertId)}"/>`
+      ? `\n      <Parameter name="alertId" value="${escapeXml(alertId)}"/>` +
+        `\n      <Parameter name="direction" value="outbound"/>`
       : "";
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${wsUrl}">
       <Parameter name="from" value="${escapeXml(from)}"/>
+      <Parameter name="to" value="${escapeXml(to)}"/>
       <Parameter name="lang" value="${escapeXml(lang)}"/>${alertParam}
     </Stream>
   </Connect>
