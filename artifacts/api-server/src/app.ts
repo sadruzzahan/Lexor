@@ -43,7 +43,15 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Clerk middleware reads CLERK_SECRET_KEY / CLERK_PUBLISHABLE_KEY from env.
-app.use(clerkMiddleware());
+// Only mount when the secret key is actually present — without it Clerk
+// throws on every request and takes down all routes.
+if (process.env.CLERK_SECRET_KEY) {
+  app.use(clerkMiddleware());
+} else {
+  logger.warn(
+    "CLERK_SECRET_KEY not set — Clerk auth middleware skipped; all requests run as anonymous",
+  );
+}
 
 app.use("/api", router);
 
