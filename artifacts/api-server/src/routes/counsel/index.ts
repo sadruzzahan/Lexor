@@ -11,6 +11,7 @@ import voiceRouter from "./voice";
 import whatsappRouter from "./whatsapp";
 import coalitionsRouter from "./coalitions";
 import trialsRouter from "./trials";
+import coachRouter from "./coach";
 
 const router: IRouter = Router();
 
@@ -29,5 +30,6 @@ router.use("/whatsapp", whatsappRouter);
 
 router.use(coalitionsRouter);
 router.use(trialsRouter);
+router.use(coachRouter);
 
 export default router;

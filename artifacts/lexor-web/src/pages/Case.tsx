@@ -8,6 +8,7 @@ import {
   Users2,
   MapPin,
   Gavel,
+  Headphones,
   ArrowLeft,
   Loader2,
   AlertTriangle,
@@ -20,6 +21,7 @@ import { Adversary } from "@/components/case/Adversary";
 import { CaseMap } from "@/components/case/CaseMap";
 import { CoalitionTab } from "@/components/case/CoalitionTab";
 import { MirrorTrial } from "@/components/case/MirrorTrial";
+import { HearingCoach } from "@/components/case/HearingCoach";
 import { useEventStream } from "@/lib/sse";
 import { eventStreamUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -30,6 +32,7 @@ const TABS = [
   { id: "adversary", label: "Adversary", Icon: Building2 },
   { id: "coalition", label: "Coalition", Icon: Users2 },
   { id: "trial", label: "Mirror Trial", Icon: Gavel },
+  { id: "coach", label: "Coach", Icon: Headphones },
   { id: "map", label: "Map", Icon: MapPin },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -198,6 +201,7 @@ export default function CasePage() {
         {tab === "adversary" && <Adversary row={row} />}
         {tab === "coalition" && <CoalitionTab row={row} />}
         {tab === "trial" && <MirrorTrial row={row} />}
+        {tab === "coach" && <HearingCoach row={row} />}
         {tab === "map" && <CaseMap entityId={row.adversaryEntityId} />}
       </div>
     </section>

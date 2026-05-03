@@ -483,6 +483,57 @@ export async function getTrial(caseId: string): Promise<TrialView | null> {
   return j.trial;
 }
 
+// ────────────────────────────────────────────────────────────────────
+// Hearing Coach (Feature 7 — stretch)
+// ────────────────────────────────────────────────────────────────────
+
+export interface CoachBrief {
+  brief: string;
+  providers: { stt: "deepgram" | "browser"; tts: "elevenlabs" | "browser" };
+  violations: Array<{ statute: string; description: string }>;
+}
+
+export interface CoachInterjection {
+  line: string | null;
+  citation: string | null;
+  urgency: "high" | "normal";
+}
+
+export async function getCoachBrief(caseId: string): Promise<CoachBrief> {
+  const r = await fetch(`${API}/cases/${caseId}/coach/brief`);
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`getCoachBrief failed: ${r.status} ${text}`);
+  }
+  return r.json();
+}
+
+export async function postCoachInterject(
+  caseId: string,
+  transcript: string,
+  signal?: AbortSignal,
+): Promise<CoachInterjection> {
+  const r = await fetch(`${API}/cases/${caseId}/coach/interject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ transcript }),
+    signal,
+  });
+  if (!r.ok) throw new Error(`coach/interject ${r.status}`);
+  return r.json();
+}
+
+export async function ackDisclosure(
+  version: string,
+  sessionId: string,
+): Promise<void> {
+  await fetch(`${API}/disclosures/ack`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ version, sessionId }),
+  });
+}
+
 export async function runTrial(
   caseId: string,
   opts: { force?: boolean } = {},
