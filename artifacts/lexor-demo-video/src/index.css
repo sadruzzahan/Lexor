@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #1A2E35;
+  --color-secondary: #4A5B63;
+  --color-accent: #D66853;
+
+  --color-bg-light: #F7F5F0;
+  --color-bg-dark: #121A1E;
+  --color-bg-muted: #EBE7DF;
+
+  --color-text-primary: #1A2E35;
+  --color-text-secondary: #4A5B63;
+  --color-text-muted: #8E9B9F;
+  --color-text-inverse: #F7F5F0;
+
+  --color-success: #2E6F40;
+  --color-warning: #D9A05B;
+  --color-error: #C14A3D;
+
+  --font-display: 'Fraunces', serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-accent: var(--color-accent);
+  --color-bg-light: var(--color-bg-light);
+  --color-bg-dark: var(--color-bg-dark);
+  --color-bg-muted: var(--color-bg-muted);
+  --color-text-primary: var(--color-text-primary);
+  --color-text-secondary: var(--color-text-secondary);
+  --color-text-muted: var(--color-text-muted);
+  --color-text-inverse: var(--color-text-inverse);
+  --color-success: var(--color-success);
+  --color-warning: var(--color-warning);
+  --color-error: var(--color-error);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
+body {
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-bg-light);
+  color: var(--color-text-primary);
+}
+
+.browser-mockup {
+  box-shadow: 0 25px 50px -12px rgba(26, 46, 53, 0.25);
+  border: 1px solid rgba(26, 46, 53, 0.1);
+}
+
+.phone-mockup {
+  box-shadow: 0 25px 50px -12px rgba(26, 46, 53, 0.25);
+  border: 4px solid #1A2E35;
+}

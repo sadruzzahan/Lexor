@@ -71,6 +71,14 @@ second language, at 11pm, the night before they have to respond?*
 
 Screenshots are in `attached_assets/screenshots/` (1440×810, plus one 375×667 mobile).
 
+### Animated demo
+
+The 65-second animated demo is built as a video artifact at
+`artifacts/lexor-demo-video/`. It plays from the workspace preview pane at
+`/lexor-demo-video/` and is exported via the video-js export pipeline. The
+shareable export URL will be appended here once the recording is downloaded
+and re-hosted (the export step happens outside the build environment).
+
 ---
 
 ## Stack

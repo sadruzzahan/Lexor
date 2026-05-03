@@ -1,0 +1,31 @@
+kind = "video"
+previewPath = "/lexor-demo-video/"
+title = "Lexor Demo Video"
+version = "1.0.0"
+id = "artifacts/lexor-demo-video"
+router = "path"
+
+[[integratedSkills]]
+name = "video-js"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/lexor-demo-video/" ]
+localPort = 21048
+
+[services.development]
+run = "pnpm --filter @workspace/lexor-demo-video run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/lexor-demo-video", "run", "build" ]
+publicDir = "artifacts/lexor-demo-video/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21048"
+BASE_PATH = "/lexor-demo-video/"
