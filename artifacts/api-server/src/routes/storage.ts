@@ -7,17 +7,29 @@ import {
 import { ObjectStorageService } from "../lib/objectStorage";
 import { HttpError } from "../middlewares/errorEnvelope";
 import { requireAuth } from "../middlewares/auth";
+import { rateLimit } from "../middlewares/rateLimit";
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
+// Per-IP cap on signed-upload-URL minting. Without this, an unauthenticated
+// caller can mint unlimited GCS upload URLs and run up bandwidth/storage
+// cost. Mirrors the case-creation limit in counsel/cases.ts.
+const uploadUrlLimit = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  scope: "ip",
+  name: "upload-url",
+});
+
 /**
  * POST /storage/uploads/request-url
  * Returns a presigned URL for direct PUT upload. Anonymous callers allowed
- * (rate-limited at the case-creation layer).
+ * but per-IP rate-limited.
  */
 router.post(
   "/storage/uploads/request-url",
+  uploadUrlLimit,
   async (req: Request, res: Response, next) => {
     const parsed = RequestUploadUrlBody.safeParse(req.body);
     if (!parsed.success) {
