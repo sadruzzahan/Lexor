@@ -9,7 +9,7 @@ import mapRouter from "./map";
 import devSeedRouter from "./devSeed";
 import voiceRouter from "./voice";
 import whatsappRouter from "./whatsapp";
-import { coalitionsRouter } from "./stubs";
+import coalitionsRouter from "./coalitions";
 
 const router: IRouter = Router();
 
@@ -26,7 +26,6 @@ router.use(devSeedRouter);
 router.use("/voice", voiceRouter);
 router.use("/whatsapp", whatsappRouter);
 
-// Coalitions still pending (Feature 5).
 router.use(coalitionsRouter);
 
 export default router;

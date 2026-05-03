@@ -6,3 +6,5 @@ export * from "./coalitionMembers";
 export * from "./lawyerBids";
 export * from "./sessions";
 export * from "./disclosures";
+export * from "./coalitionVotes";
+export * from "./notifications";

@@ -12,6 +12,8 @@ import type { RegulatorComplaint } from "./drafting/regulatorComplaint";
 import type { ResponseLetter } from "./drafting/responseLetter";
 import { resolveAdversaryForCase } from "./adversary";
 import { recordMarkerForCase } from "./map";
+import { matchOrFormCoalition } from "./coalition/match";
+import { embedCaseText } from "./embedding";
 
 /**
  * Per-case event bus. SSE consumers subscribe via the events route; the
@@ -266,21 +268,24 @@ export async function runPipeline(caseId: string): Promise<void> {
       (cs) => ({ agencies: cs.map((c) => c.agency) }),
     );
 
-    // Embedding step — placeholder for the case-similarity index.
-    // Stores a deterministic content hash now; real pgvector embedding
-    // lands with the coalition feature. Emitting the step keeps the
-    // pipeline contract aligned with the build plan even while we defer
-    // the heavy ML lift.
+    // Embedding step — text-embedding-3-large @ 1536 dims, persisted to
+    // cases.embedding for coalition similarity lookups. Falls back to a
+    // null embedding when the provider is unreachable so the pipeline
+    // still completes; coalition matching simply skips that case.
     await step(
       caseId,
       "embedding",
       async () => {
-        const fingerprint = await import("node:crypto").then((c) =>
-          c.createHash("sha256").update(extraction.rawText).digest("hex"),
-        );
-        return fingerprint;
+        const vec = await embedCaseText(extraction.rawText);
+        if (vec) {
+          await db
+            .update(casesTable)
+            .set({ embedding: vec, updatedAt: new Date() })
+            .where(eq(casesTable.id, caseId));
+        }
+        return vec ? { dims: vec.length } : { dims: 0, fallback: true };
       },
-      (fp) => ({ fingerprint: fp.slice(0, 12), method: "sha256-stub" }),
+      (r) => r,
     );
 
     // Adversary resolution — Feature 2. Resolves the opposing party
@@ -320,8 +325,18 @@ export async function runPipeline(caseId: string): Promise<void> {
       });
     }
 
-    // Coalition stub — real impl lands in Feature 5.
-    await step(caseId, "coalition", async () => null, () => ({ status: "deferred" }));
+    // Coalition matching — Feature 5. Best-effort: never blocks the
+    // pipeline. Returns the new (or joined) coalitionId when the case
+    // either forms a coalition or attaches to an existing open one.
+    await step(
+      caseId,
+      "coalition",
+      async () => matchOrFormCoalition(caseId).catch((err) => {
+        logger.warn({ err, caseId }, "coalition match failed");
+        return { coalitionId: null, matchedCaseIds: [], reason: "below_threshold" as const };
+      }),
+      (r) => ({ coalitionId: r.coalitionId, reason: r.reason }),
+    );
 
     await db
       .update(casesTable)

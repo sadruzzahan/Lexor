@@ -19,6 +19,7 @@ import { Soon } from "@/pages/Soon";
 import EntityPage from "@/pages/Entity";
 import MapPage from "@/pages/Map";
 import VoicePage from "@/pages/Voice";
+import CoalitionPage from "@/pages/Coalition";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -28,9 +29,7 @@ function Router() {
       <Route path="/upload" component={UploadPage} />
       <Route path="/c/:caseId" component={CasePage} />
       <Route path="/map" component={MapPage} />
-      <Route path="/coalition/:id">
-        <Soon titleKey="page.coalition.title" Icon={Users2} />
-      </Route>
+      <Route path="/coalition/:id" component={CoalitionPage} />
       <Route path="/entity/:id" component={EntityPage} />
       <Route path="/voice" component={VoicePage} />
       <Route path="/rights/:vertical">

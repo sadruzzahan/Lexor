@@ -17,6 +17,7 @@ import { Defense } from "@/components/case/Defense";
 import { CounterAttack } from "@/components/case/CounterAttack";
 import { Adversary } from "@/components/case/Adversary";
 import { CaseMap } from "@/components/case/CaseMap";
+import { CoalitionTab } from "@/components/case/CoalitionTab";
 import { useEventStream } from "@/lib/sse";
 import { eventStreamUrl } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -192,7 +193,7 @@ export default function CasePage() {
         {tab === "defense" && <Defense row={row} />}
         {tab === "counter" && <CounterAttack row={row} />}
         {tab === "adversary" && <Adversary row={row} />}
-        {tab === "coalition" && <Deferred title="Coalition Builder" />}
+        {tab === "coalition" && <CoalitionTab row={row} />}
         {tab === "map" && <CaseMap entityId={row.adversaryEntityId} />}
       </div>
     </section>

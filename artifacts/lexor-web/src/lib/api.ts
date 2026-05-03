@@ -318,3 +318,134 @@ export async function createTextCase(letterText: string): Promise<string> {
   const j = (await r.json()) as { caseId: string };
   return j.caseId;
 }
+
+// ────────────────────────────────────────────────────────────────────
+// Coalitions (Feature 5)
+// ────────────────────────────────────────────────────────────────────
+
+export type CoalitionStatus = "forming" | "open" | "matched" | "closed";
+
+export interface CoalitionListItem {
+  id: string;
+  entityId: string;
+  entityName: string | null;
+  vertical: string;
+  jurisdiction: string | null;
+  caseCount: number;
+  status: CoalitionStatus;
+  createdAt: string;
+}
+
+export interface CoalitionMemberAnon {
+  label: string;
+  jurisdiction: string;
+  vertical: string;
+  hasOptedIn: boolean;
+  joinedAt: string;
+}
+
+export interface CoalitionBid {
+  id: string;
+  coalitionId: string;
+  lawyerName: string;
+  lawyerBarNumber: string;
+  lawyerEmail: string;
+  lawyerFirm: string | null;
+  contingencyPercent: string;
+  notes: string | null;
+  createdAt: string;
+  voteCount: number;
+}
+
+export interface CoalitionDetail extends CoalitionListItem {
+  classComplaintDraftHtml: string | null;
+  members: CoalitionMemberAnon[];
+  optedInCount: number;
+  bids: CoalitionBid[];
+  disclaimerVersion: string;
+}
+
+export interface CaseCoalition {
+  id: string;
+  hasOptedIn: boolean;
+  status: CoalitionStatus;
+  entityName: string | null;
+  caseCount: number;
+}
+
+export async function listCoalitions(): Promise<CoalitionListItem[]> {
+  const r = await fetch(`${API}/coalitions`);
+  if (!r.ok) throw new Error(`listCoalitions failed: ${r.status}`);
+  const j = (await r.json()) as { coalitions: CoalitionListItem[] };
+  return j.coalitions;
+}
+
+export async function getCoalition(id: string): Promise<CoalitionDetail> {
+  const r = await fetch(`${API}/coalitions/${id}`);
+  if (!r.ok) throw new Error(`getCoalition failed: ${r.status}`);
+  return r.json();
+}
+
+export async function getCoalitionForCase(
+  caseId: string,
+): Promise<CaseCoalition | null> {
+  const r = await fetch(`${API}/coalitions/by-case/${caseId}`);
+  if (!r.ok) return null;
+  const j = (await r.json()) as { coalition: CaseCoalition | null };
+  return j.coalition;
+}
+
+export async function joinCoalition(
+  coalitionId: string,
+  caseId: string,
+  disclosureVersion: string,
+): Promise<void> {
+  const r = await fetch(`${API}/coalitions/${coalitionId}/join`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, hasOptedIn: true, disclosureVersion }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`joinCoalition failed: ${r.status} ${text}`);
+  }
+}
+
+export async function submitCoalitionBid(
+  coalitionId: string,
+  body: {
+    lawyerName: string;
+    lawyerBarNumber: string;
+    lawyerEmail: string;
+    lawyerFirm?: string | null;
+    contingencyPercent: number;
+    notes?: string | null;
+  },
+): Promise<CoalitionBid> {
+  const r = await fetch(`${API}/coalitions/${coalitionId}/bid`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`submitCoalitionBid failed: ${r.status} ${text}`);
+  }
+  return r.json();
+}
+
+export async function voteCoalitionBid(
+  coalitionId: string,
+  caseId: string,
+  bidId: string,
+): Promise<void> {
+  const r = await fetch(`${API}/coalitions/${coalitionId}/vote`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ caseId, bidId }),
+  });
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`voteCoalitionBid failed: ${r.status} ${text}`);
+  }
+}
