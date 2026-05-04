@@ -1,0 +1,126 @@
+{
+  "suppression motion": {
+    "plain": "ask the judge to ignore evidence",
+    "definition": "A request asking the court to throw out evidence the police got the wrong way (e.g. without a warrant)."
+  },
+  "motion to suppress": {
+    "plain": "ask the judge to ignore evidence",
+    "definition": "A request asking the court to throw out evidence the police got the wrong way."
+  },
+  "Brady material": {
+    "plain": "evidence that could help the defense",
+    "definition": "Anything the prosecution has that points to your innocence or weakens their case. They are required to turn it over."
+  },
+  "voir dire": {
+    "plain": "questioning the jury pool",
+    "definition": "The part of trial where lawyers ask potential jurors questions to decide who sits on the jury."
+  },
+  "discovery": {
+    "plain": "evidence both sides have to share",
+    "definition": "The phase where the prosecution and defense exchange the documents, witness lists, and reports they plan to use."
+  },
+  "voir dire challenge": {
+    "plain": "ask the judge to remove a juror",
+    "definition": "Asking the judge to strike a potential juror — either for a stated reason or on a peremptory basis."
+  },
+  "preliminary hearing": {
+    "plain": "early hearing to test the case",
+    "definition": "An early hearing where a judge decides if there's enough evidence to make you stand trial."
+  },
+  "arraignment": {
+    "plain": "first court appearance",
+    "definition": "Your first court date, where you hear the charges and enter a plea."
+  },
+  "plea": {
+    "plain": "your answer to the charges",
+    "definition": "Your formal answer — guilty, not guilty, or no contest — to the charges against you."
+  },
+  "plea bargain": {
+    "plain": "deal with the prosecutor",
+    "definition": "A negotiated agreement where you plead guilty to a lesser charge in exchange for a lighter sentence."
+  },
+  "exculpatory evidence": {
+    "plain": "evidence pointing away from guilt",
+    "definition": "Anything that suggests you didn't do it, or weakens the prosecution's case."
+  },
+  "inculpatory evidence": {
+    "plain": "evidence pointing toward guilt",
+    "definition": "Anything that suggests you did do it."
+  },
+  "chain of custody": {
+    "plain": "who handled the evidence",
+    "definition": "The paper trail showing exactly who touched a piece of evidence, when, and where it was stored — gaps can get it thrown out."
+  },
+  "hearsay": {
+    "plain": "secondhand statement",
+    "definition": "A statement someone made outside court, offered to prove what they said is true. Usually not allowed."
+  },
+  "subpoena": {
+    "plain": "court order to appear or hand over records",
+    "definition": "A court order requiring a person to testify or produce documents."
+  },
+  "writ": {
+    "plain": "court order",
+    "definition": "A formal written court order requiring (or forbidding) some action."
+  },
+  "indictment": {
+    "plain": "formal charging document",
+    "definition": "The formal document, usually issued by a grand jury, that lists the crimes someone is charged with."
+  },
+  "deposition": {
+    "plain": "sworn out-of-court interview",
+    "definition": "A pre-trial interview under oath, recorded by a court reporter, where one side questions a witness."
+  },
+  "cross-examination": {
+    "plain": "questioning the other side's witness",
+    "definition": "Your turn to question a witness the other side called — usually to challenge what they said."
+  },
+  "direct examination": {
+    "plain": "questioning your own witness",
+    "definition": "When you question a witness you've called yourself, to lay out your version of events."
+  },
+  "objection": {
+    "plain": "tell the judge a question is improper",
+    "definition": "A formal challenge to evidence or testimony being offered, asking the judge to disallow it."
+  },
+  "leading question": {
+    "plain": "question that suggests its own answer",
+    "definition": "A question phrased to suggest the answer ('You were there, weren't you?'). Usually only allowed on cross."
+  },
+  "Miranda rights": {
+    "plain": "your right to stay silent and have a lawyer",
+    "definition": "The warning police must give before custodial questioning — including the right to remain silent and the right to an attorney."
+  },
+  "probable cause": {
+    "plain": "enough reason for police to act",
+    "definition": "A reasonable basis to believe a crime has been committed — required for arrests and most warrants."
+  },
+  "reasonable suspicion": {
+    "plain": "enough reason to briefly stop someone",
+    "definition": "A lower standard than probable cause — enough for police to briefly detain or pat someone down."
+  },
+  "Fourth Amendment": {
+    "plain": "protection from unreasonable searches",
+    "definition": "The constitutional rule that police generally need a warrant or a recognized exception before searching you, your home, or your stuff."
+  },
+  "Fifth Amendment": {
+    "plain": "right to stay silent",
+    "definition": "The constitutional right not to incriminate yourself — including by refusing to answer police questions."
+  },
+  "Sixth Amendment": {
+    "plain": "right to a lawyer and a fair trial",
+    "definition": "The constitutional rights to counsel, to confront witnesses, and to a speedy public trial by jury."
+  },
+  "habeas corpus": {
+    "plain": "challenge to unlawful detention",
+    "definition": "A petition asking a court to decide whether someone is being held legally."
+  },
+  "remand": {
+    "plain": "send back",
+    "definition": "When a higher court sends a case back to a lower court for more proceedings."
+  },
+  "in limine": {
+    "plain": "before-trial ruling on evidence",
+    "definition": "A pre-trial motion asking the judge to decide whether certain evidence can be used at trial."
+  }
+}

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/briefcase-app"
+title = "Briefcase"
+version = "1.0.0"
+id = "artifacts/briefcase-app"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/briefcase-app" ]
+localPort = 18258
+
+[services.development]
+run = "pnpm --filter @workspace/briefcase-app run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/briefcase-app", "run", "build" ]
+publicDir = "artifacts/briefcase-app/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18258"
+BASE_PATH = "/briefcase-app/"

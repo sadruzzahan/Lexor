@@ -1,0 +1,925 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Beat Detective Field Kit API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: users
+    description: User management
+  - name: cases
+    description: Investigation case management
+  - name: files
+    description: Case file attachments
+  - name: runs
+    description: Investigation run execution
+  - name: run-events
+    description: SSE run event stream
+  - name: artifacts
+    description: Run artifacts produced by subagents
+  - name: drafts
+    description: Statement drafts
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status with dependency checks
+      responses:
+        "200":
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Users (v1) ─────────────────────────────────────────────────────────────
+  /v1/users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /v1/users/{userId}:
+    parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      responses:
+        "200":
+          description: User
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      responses:
+        "204":
+          description: Deleted
+
+  # ── Cases (v1) ─────────────────────────────────────────────────────────────
+  /v1/cases:
+    get:
+      operationId: listCases
+      tags: [cases]
+      summary: List investigation cases
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, closed, archived]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of cases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseListResponse"
+    post:
+      operationId: createCase
+      tags: [cases]
+      summary: Create a new investigation case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCaseBody"
+      responses:
+        "201":
+          description: Case created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+
+  /v1/cases/{caseId}:
+    parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getCase
+      tags: [cases]
+      summary: Get a case by ID
+      responses:
+        "200":
+          description: Case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateCase
+      tags: [cases]
+      summary: Update a case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCaseBody"
+      responses:
+        "200":
+          description: Updated case
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteCase
+      tags: [cases]
+      summary: Soft-delete a case
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Files ─────────────────────────────────────────────────────────────────
+  /v1/cases/{caseId}/files:
+    parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listCaseFiles
+      tags: [files]
+      summary: List files attached to a case
+      parameters:
+        - name: sourceType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [photo, audio, note, scan, upload, drive]
+      responses:
+        "200":
+          description: File list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseFileListResponse"
+    post:
+      operationId: uploadCaseFile
+      tags: [files]
+      summary: Upload a file to a case (multipart)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                sourceType:
+                  type: string
+                  enum: [photo, audio, note, scan, upload, drive]
+                caption:
+                  type: string
+      responses:
+        "201":
+          description: File uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseFile"
+
+  /v1/cases/{caseId}/files/{fileId}:
+    parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: fileId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getCaseFile
+      tags: [files]
+      summary: Get metadata for a case file
+      responses:
+        "200":
+          description: File metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseFile"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteCaseFile
+      tags: [files]
+      summary: Delete a case file
+      responses:
+        "204":
+          description: Deleted
+
+  /v1/cases/{caseId}/files/{fileId}/content:
+    parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: fileId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getCaseFileContent
+      tags: [files]
+      summary: Serve the raw bytes of a case file
+      responses:
+        "200":
+          description: File bytes
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Run lifecycle ──────────────────────────────────────────────────────────
+  /v1/cases/{caseId}/run:
+    parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: startRun
+      tags: [runs]
+      summary: Start a new investigation run and return runId immediately
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartRunBody"
+      responses:
+        "201":
+          description: Run started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartRunResponse"
+
+  /v1/runs/{runId}:
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getRun
+      tags: [runs]
+      summary: Get run status
+      responses:
+        "200":
+          description: Run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteRun
+      tags: [runs]
+      summary: Cancel/delete a run
+      responses:
+        "204":
+          description: Deleted
+
+  /v1/runs/{runId}/events:
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: streamRunEvents
+      tags: [run-events]
+      summary: SSE stream for a run (mock detective multi-agent sequence)
+      responses:
+        "200":
+          description: >
+            SSE event stream — newline-delimited `data: <json>` lines.
+            Each line is an AgentEvent (see components/schemas/AgentEvent).
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  # ── Artifacts ────────────────────────────────────────────────────────────
+  /v1/runs/{runId}/artifacts:
+    parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listRunArtifacts
+      tags: [artifacts]
+      summary: List artifacts produced by a run
+      responses:
+        "200":
+          description: Artifact list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactListResponse"
+
+  /v1/artifacts/{artifactId}:
+    parameters:
+      - name: artifactId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getArtifact
+      tags: [artifacts]
+      summary: Get an artifact by ID
+      responses:
+        "200":
+          description: Artifact
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  # ── Draft (case-level) ────────────────────────────────────────────────────
+  /v1/cases/{caseId}/draft:
+    parameters:
+      - name: caseId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getDraft
+      tags: [drafts]
+      summary: Get the current draft for a case
+      responses:
+        "200":
+          description: Draft
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+        "404":
+          description: No draft yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: upsertDraft
+      tags: [drafts]
+      summary: Create or replace the draft for a case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertDraftBody"
+      responses:
+        "200":
+          description: Draft saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Draft"
+
+components:
+  schemas:
+    # ── Common ───────────────────────────────────────────────────────────────
+    HealthStatus:
+      type: object
+      required: [status, db, anthropic, gemini, openai, e2b, tavily]
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        db:
+          type: boolean
+        anthropic:
+          type: boolean
+        gemini:
+          type: boolean
+        openai:
+          type: boolean
+        e2b:
+          type: boolean
+        tavily:
+          type: boolean
+        version:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        details:
+          type: string
+
+    # ── User ─────────────────────────────────────────────────────────────────
+    User:
+      type: object
+      required: [id, displayName, tier, createdAt]
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        tier:
+          type: string
+          enum: [free, agency]
+        createdAt:
+          type: string
+          format: date-time
+
+    UserListResponse:
+      type: object
+      required: [users, total]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+
+    CreateUserBody:
+      type: object
+      required: [displayName]
+      properties:
+        displayName:
+          type: string
+        email:
+          type: string
+        tier:
+          type: string
+          enum: [free, agency]
+
+    UpdateUserBody:
+      type: object
+      properties:
+        displayName:
+          type: string
+        email:
+          type: string
+          nullable: true
+        tier:
+          type: string
+          enum: [free, agency]
+
+    # ── Case ─────────────────────────────────────────────────────────────────
+    Case:
+      type: object
+      required: [id, title, rolePack, status, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        rolePack:
+          type: string
+        goal:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [open, closed, archived]
+        jurisdictionContext:
+          type: object
+          additionalProperties: true
+          nullable: true
+        deletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CaseListResponse:
+      type: object
+      required: [cases, total]
+      properties:
+        cases:
+          type: array
+          items:
+            $ref: "#/components/schemas/Case"
+        total:
+          type: integer
+
+    CreateCaseBody:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        rolePack:
+          type: string
+        goal:
+          type: string
+        language:
+          type: string
+        jurisdictionContext:
+          type: object
+          additionalProperties: true
+        userId:
+          type: string
+
+    UpdateCaseBody:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+          nullable: true
+        goal:
+          type: string
+          nullable: true
+        language:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [open, closed, archived]
+        jurisdictionContext:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    # ── CaseFile ──────────────────────────────────────────────────────────────
+    CaseFile:
+      type: object
+      required: [id, caseId, filename, mimeType, sizeBytes, storageUrl, createdAt]
+      properties:
+        id:
+          type: string
+        caseId:
+          type: string
+        sourceType:
+          type: string
+          enum: [photo, audio, note, scan, upload, drive]
+          nullable: true
+        filename:
+          type: string
+        originalName:
+          type: string
+          nullable: true
+        mimeType:
+          type: string
+        sha256:
+          type: string
+          nullable: true
+        sizeBytes:
+          type: integer
+        storageUrl:
+          type: string
+        exif:
+          type: object
+          additionalProperties: true
+          nullable: true
+        gps:
+          type: object
+          additionalProperties: true
+          nullable: true
+        capturedAt:
+          type: string
+          format: date-time
+          nullable: true
+        detectedLanguage:
+          type: string
+          nullable: true
+        caption:
+          type: string
+          nullable: true
+        transcript:
+          type: string
+          nullable: true
+        autoTagJson:
+          type: object
+          additionalProperties: true
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    CaseFileListResponse:
+      type: object
+      required: [files]
+      properties:
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaseFile"
+
+    # ── Run ──────────────────────────────────────────────────────────────────
+    Run:
+      type: object
+      required: [id, caseId, status, createdAt]
+      properties:
+        id:
+          type: string
+        caseId:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        idempotencyKey:
+          type: string
+          nullable: true
+        totalCostUsd:
+          type: number
+          nullable: true
+        startedAt:
+          type: string
+          format: date-time
+          nullable: true
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    StartRunBody:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+        notes:
+          type: string
+
+    StartRunResponse:
+      type: object
+      required: [runId]
+      properties:
+        runId:
+          type: string
+
+    # ── AgentEvent (SSE) ─────────────────────────────────────────────────────
+    AgentEvent:
+      type: object
+      description: >
+        A single SSE data line emitted by `GET /v1/runs/:runId/events`.
+        Every event carries a monotonic `idx` counter and an `eventType`
+        discriminator. The remaining fields depend on the `eventType`.
+      required: [idx, eventType]
+      properties:
+        idx:
+          type: integer
+          description: Monotonically increasing event index within the run
+        eventType:
+          type: string
+          enum:
+            - run_started
+            - subagent_started
+            - tool_call
+            - tool_result
+            - partial_result
+            - subagent_completed
+            - done
+            - error
+        runId:
+          type: string
+          description: Present on `run_started` and `done`
+        caseId:
+          type: string
+          description: Present on `run_started`
+        name:
+          type: string
+          description: Subagent name — present on `subagent_started` and `subagent_completed`
+        subagent:
+          type: string
+          description: Subagent name — present on `partial_result`, `tool_call`, and `tool_result`
+        tool:
+          type: object
+          additionalProperties: true
+          description: Tool call/result payload — present on `tool_call` and `tool_result`
+        data:
+          type: object
+          additionalProperties: true
+          description: Payload specific to the event type
+        totalEvents:
+          type: integer
+          description: Total number of events emitted — present on `done`
+        message:
+          type: string
+          description: Error message — present on `error`
+
+    # ── Artifact ─────────────────────────────────────────────────────────────
+    Artifact:
+      type: object
+      required: [id, runId, subagent, kind, data, createdAt]
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+        subagent:
+          type: string
+        kind:
+          type: string
+          enum: [jurisdiction, scene_tags, witness_map, suspect_profile, statement_draft, citation, summary]
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ArtifactListResponse:
+      type: object
+      required: [artifacts]
+      properties:
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artifact"
+
+    # ── Draft ────────────────────────────────────────────────────────────────
+    Draft:
+      type: object
+      required: [id, caseId, body, updatedAt]
+      properties:
+        id:
+          type: string
+        caseId:
+          type: string
+        artifactId:
+          type: string
+          nullable: true
+        body:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    UpsertDraftBody:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+        artifactId:
+          type: string

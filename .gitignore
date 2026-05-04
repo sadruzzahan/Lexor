@@ -47,3 +47,10 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Merged sub-packages (Beat + Briefcased)
+packages/*/node_modules/
+packages/*/.cache/
+packages/*/.local/
+packages/*/dist/
+packages/*/*.tsbuildinfo

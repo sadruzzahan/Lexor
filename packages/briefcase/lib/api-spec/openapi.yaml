@@ -1,0 +1,2442 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken.
+  title: Api
+  version: 0.1.0
+  description: |
+    JusticeOS engine API for Briefcase (criminal-defense copilot) and future Beat
+    (detective copilot). Authored once here so the web app, the api-server, and
+    every replay tool import the same Zod schemas, React Query hooks, and
+    TypeScript types via `@workspace/api-zod` and `@workspace/api-client-react`.
+
+    Streaming endpoints use Server-Sent Events. See R-11 for the full SSE wire
+    format including `Last-Event-ID` resumption semantics.
+servers:
+  - url: /api
+    description: Base API path
+
+tags:
+  - name: health
+    description: Liveness and readiness probes
+  - name: cases
+    description: Case lifecycle (create, list, view, rename, delete)
+  - name: files
+    description: Case file ingest (upload, Drive, folder)
+  - name: runs
+    description: Agent run lifecycle and event streaming
+  - name: auth
+    description: Google OAuth flows for Drive ingest
+  - name: observability
+    description: Cost ledger, audit bundles, traces, replay, prompts (G21+ stubs)
+
+paths:
+  # --------------------------------------------------------------------------
+  # Health
+  # --------------------------------------------------------------------------
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status.
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # --------------------------------------------------------------------------
+  # R-01..R-05 — Cases
+  # --------------------------------------------------------------------------
+  /v1/cases:
+    post:
+      operationId: createCase
+      tags: [cases]
+      summary: R-01 Create a case
+      description: Create a new case for the current user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCaseRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    get:
+      operationId: listCases
+      tags: [cases]
+      summary: R-03 List cases
+      description: List cases for the current user, paginated, most-recently-updated first.
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Opaque pagination cursor returned by the previous page.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Page of cases
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/cases/{caseId}:
+    parameters:
+      - $ref: "#/components/parameters/CaseId"
+    get:
+      operationId: getCase
+      tags: [cases]
+      summary: R-02 Get a case
+      description: Get a case with its files, latest run summary, and latest artifacts.
+      responses:
+        "200":
+          description: Case detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateCase
+      tags: [cases]
+      summary: R-04 Update a case
+      description: Rename or update the description of a case.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCaseRequest"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Case"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteCase
+      tags: [cases]
+      summary: R-05 Soft-delete a case
+      description: Soft-deletes the case. Recoverable for 30 days before nightly hard delete.
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --------------------------------------------------------------------------
+  # R-06..R-09 — Files
+  # --------------------------------------------------------------------------
+  /v1/cases/{caseId}/files:
+    parameters:
+      - $ref: "#/components/parameters/CaseId"
+    post:
+      operationId: uploadCaseFile
+      tags: [files]
+      summary: R-06 Upload a case file
+      description: |
+        Upload a file (PDF, JPG, PNG, TXT, audio) to a case. Server hashes the
+        bytes (SHA-256) and skips ingest if a file with the same hash already
+        exists for this case (FR-023 idempotent ingest).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadCaseFileRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseFile"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cases/{caseId}/files/from-drive:
+    parameters:
+      - $ref: "#/components/parameters/CaseId"
+    post:
+      operationId: ingestDriveFile
+      tags: [files]
+      summary: R-07 Ingest a single Drive file
+      description: |
+        Server fetches the file via Workspace MCP, OCRs it, and stores it as a
+        case file. Long-running; streams ingest progress via SSE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestDriveFileRequest"
+      responses:
+        "200":
+          description: SSE stream of ingest progress and final CaseFile
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/IngestEvent"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cases/{caseId}/files/from-folder:
+    parameters:
+      - $ref: "#/components/parameters/CaseId"
+    post:
+      operationId: ingestDriveFolder
+      tags: [files]
+      summary: R-08 Ingest a Drive folder
+      description: |
+        Walk the Drive folder via Workspace MCP and ingest every file. Streams
+        per-file progress via SSE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestDriveFolderRequest"
+      responses:
+        "200":
+          description: SSE stream of ingest progress
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/IngestEvent"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cases/{caseId}/files/{fileId}:
+    parameters:
+      - $ref: "#/components/parameters/CaseId"
+      - $ref: "#/components/parameters/FileId"
+    get:
+      operationId: getCaseFile
+      tags: [files]
+      summary: R-09 Get a case file
+      description: Returns metadata plus a short-lived signed URL for the PDF viewer.
+      responses:
+        "200":
+          description: Case file metadata + signed URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseFileDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --------------------------------------------------------------------------
+  # R-10..R-13 — Runs
+  # --------------------------------------------------------------------------
+  /v1/cases/{caseId}/run:
+    parameters:
+      - $ref: "#/components/parameters/CaseId"
+    post:
+      operationId: startCaseRun
+      tags: [runs]
+      summary: R-10 Start a run
+      description: |
+        Start an agent run on a case. Idempotent: replaying with the same
+        `idempotencyKey` returns the existing `runId` instead of starting a
+        second run. Only one active run per case is allowed; a second concurrent
+        request returns `409 conflict`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartRunRequest"
+      responses:
+        "201":
+          description: Run started (or idempotent replay returned existing run)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartRunResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRun
+      tags: [runs]
+      summary: R-12 Get final run state
+      description: Returns the final state of a run including status and any error.
+      responses:
+        "200":
+          description: Run state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/runs/{runId}/events:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: streamRunEvents
+      tags: [runs]
+      summary: R-11 Stream run events (SSE)
+      description: |
+        Server-Sent Events stream of `AgentEvent` payloads for the run.
+
+        ## Wire format
+
+        Each SSE message looks like:
+
+        ```
+        id: 42
+        event: agent_event
+        data: {"idx":42,"type":"tool_call","subagent":"TimelineBuilder", ...}
+        ```
+
+        - `id:` is the monotonic `eventIndex` of that event. Browsers and
+          `react-native-sse` automatically resend it as the `Last-Event-ID`
+          header on reconnect.
+        - `event:` is always `agent_event` for typed payloads (no separate
+          channels).
+        - `data:` is one JSON-encoded `AgentEvent` per message.
+
+        ## Resumption
+
+        - Pass `?since=N` (preferred) **or** the `Last-Event-ID: N` header
+          (auto-set by SSE clients) to resume from event index `N+1`.
+        - The server replays persisted events from `run_events` synchronously
+          before switching back to the live stream, so clients always see a
+          monotonic `idx` with no gaps.
+        - Once the terminal `done` event has been delivered, the connection
+          closes; reconnects after `done` immediately replay history and close
+          again.
+      parameters:
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: -1
+          description: |
+            Last event index already seen by the client. Server resumes at
+            `since + 1`. Defaults to `-1` (deliver from the beginning).
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema:
+            type: string
+          description: |
+            Standard SSE resumption header. When present, takes effect only if
+            `since` is omitted.
+      responses:
+        "200":
+          description: SSE stream of agent events
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/AgentEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/runs/{runId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    post:
+      operationId: cancelRun
+      tags: [runs]
+      summary: R-13 Cancel a run
+      description: |
+        Aborts in-flight model and tool calls. The SSE stream emits a `done`
+        event with `cancelled=true` within 2 s.
+      responses:
+        "202":
+          description: Cancellation accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CancelRunResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  # --------------------------------------------------------------------------
+  # R-14..R-15 — Auth
+  # --------------------------------------------------------------------------
+  /v1/auth/google/callback:
+    post:
+      operationId: googleOauthCallback
+      tags: [auth]
+      summary: R-14 Google OAuth callback
+      description: Server exchanges the OAuth code, encrypts and stores the refresh token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GoogleOAuthCallbackRequest"
+      responses:
+        "200":
+          description: Linked successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GoogleOAuthCallbackResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/google/disconnect:
+    post:
+      operationId: googleOauthDisconnect
+      tags: [auth]
+      summary: R-15 Disconnect Google account
+      description: Revoke and delete the user's stored Google refresh token.
+      responses:
+        "204":
+          description: Disconnected
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # --------------------------------------------------------------------------
+  # R-20..R-30 — Observability stubs (owned by G21+)
+  # --------------------------------------------------------------------------
+  /v1/runs/{runId}/cost:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRunCost
+      tags: [observability]
+      summary: R-20 Live cost-so-far breakdown
+      description: |
+        Returns the live cost ledger for a run, broken down by model, tool,
+        and phase (G21 — Engine Tier S).
+      responses:
+        "200":
+          description: Cost breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunCostBreakdown"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/runs/{runId}/audit:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRunAudit
+      tags: [observability]
+      summary: R-21 Download signed audit bundle
+      description: |
+        Returns a signed zip bundle containing events, artifacts, citations,
+        prompts, cost ledger, and model routing decisions for the run.
+        The HMAC-SHA256 signature + key id are also exposed via response
+        headers `X-Bundle-Signature` and `X-Signing-Key-Id`. (G22, NFR-E-008)
+      responses:
+        "200":
+          description: Signed audit bundle (zip)
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/runs/{runId}/trace:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: getRunTrace
+      tags: [observability]
+      summary: R-22 OpenTelemetry trace
+      description: |
+        Returns the OpenTelemetry-shaped trace JSON for the run, used by
+        the Glass Box detail panel. Spans are recorded into an in-memory
+        per-run buffer while the run executes and dropped after the run
+        finalizes; an empty span list means the buffer has been recycled.
+        (G22, NFR-E-009)
+      responses:
+        "200":
+          description: OTel trace JSON
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunTrace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/runs/{runId}/branch:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    post:
+      operationId: branchRun
+      tags: [observability]
+      summary: R-23 Fork a run from a prior event index
+      description: |
+        STUB (owned by G15 — Time-Travel Debugger, FR-071). Fork a child run
+        from the parent at `branchedAtIdx` with optional edited inputs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BranchRunRequest"
+      responses:
+        "201":
+          description: Branched
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchRunResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/runs/{runId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+    get:
+      operationId: listRunMessages
+      tags: [observability]
+      summary: R-30 List inter-subagent messages
+      description: |
+        STUB (owned by G15 — Glass Box detail). Returns inter-subagent messages
+        emitted via the agent message bus during the run.
+      responses:
+        "200":
+          description: Inter-agent messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentMessageList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: dispatchAgentMessage
+      tags: [observability]
+      summary: R-24 Dispatch an inter-subagent message
+      description: |
+        Inject an inter-subagent bus message (G23 NFR-E-014). Used by the
+        ReplayHarness for forced injection and by debug tooling.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentMessageInput"
+      responses:
+        "202":
+          description: Message accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentMessage"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/cache/stats:
+    get:
+      operationId: getCacheStats
+      tags: [observability]
+      summary: R-25 Semantic cache statistics
+      description: |
+        Returns hit ratio, top entries, and dollar savings for the semantic
+        cache (G21 — Engine Tier S, NFR-E-003).
+      responses:
+        "200":
+          description: Cache stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CacheStats"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/replay/cases:
+    get:
+      operationId: listReplayCases
+      tags: [observability]
+      summary: R-26 List auto-saved replay cases
+      description: Lists auto-saved CI replay fixtures (G23 NFR-E-016).
+      responses:
+        "200":
+          description: Replay case list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayCaseList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/replay/cases/{replayCaseId}/run:
+    parameters:
+      - name: replayCaseId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: runReplayCase
+      tags: [observability]
+      summary: R-27 Execute a replay case
+      description: Runs the replay and returns a diff vs golden output (G23 NFR-E-016).
+      responses:
+        "200":
+          description: Replay diff result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplayRunResult"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/prompts/{promptKey}:
+    parameters:
+      - name: promptKey
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: listPromptVersions
+      tags: [observability]
+      summary: R-28 List prompt versions
+      description: Returns prompt versions and active variants (G23 NFR-E-012).
+      responses:
+        "200":
+          description: Prompt versions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptVersionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/prompts/{promptKey}/activate:
+    parameters:
+      - name: promptKey
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      operationId: activatePromptVersion
+      tags: [observability]
+      summary: R-29 Activate a prompt version + variant
+      description: Activate a prompt version + variant (admin only; G23 NFR-E-012).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivatePromptRequest"
+      responses:
+        "200":
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromptVersion"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/mcp/servers:
+    get:
+      operationId: listMcpServers
+      tags: [observability]
+      summary: List registered MCP servers (G23 catalog)
+      description: |
+        Returns the in-process MCP catalog (case-primitives,
+        jurisdiction-rules, evidence-tools). Each entry is independently
+        versioned and hot-swappable.
+      responses:
+        "200":
+          description: MCP server list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/McpServerList"
+
+  /v1/runs/{runId}/webrtc/{peer}:
+    parameters:
+      - $ref: "#/components/parameters/RunId"
+      - name: peer
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [presenter, audience]
+    get:
+      operationId: pullWebRtcSignals
+      tags: [observability]
+      summary: Drain pending WebRTC signaling messages for the given peer
+      description: |
+        Long-poll style drain for WebRTC signaling — Courtroom Mode
+        media path (G23). Owner-scoped; relays offers/answers/ICE
+        between presenter and audience peers.
+      responses:
+        "200":
+          description: Pending signaling messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebRtcSignalDrain"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      operationId: pushWebRtcSignal
+      tags: [observability]
+      summary: Push a WebRTC signaling message
+      description: |
+        Pushes an offer/answer/ICE candidate from this peer onto the
+        relay queue for the other peer to drain (G23 Courtroom Mode).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebRtcSignalInput"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # --------------------------------------------------------------------------
+  # R-30..R-33 — G14 Courtroom Mode (Live Objection Copilot)
+  # --------------------------------------------------------------------------
+  /v1/courtroom/sessions:
+    post:
+      operationId: createCourtroomSession
+      tags: [observability]
+      summary: R-30 Create a Courtroom Mode session
+      description: |
+        Provision a Courtroom Mode session. Audio chunks are POSTed to
+        R-31, ObjectionEvent SSE is streamed from R-32, and R-33 ends
+        the session (optionally persisting the transcript when consent
+        was granted).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCourtroomSessionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CourtroomSession"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/courtroom/sessions/{sessionId}/audio:
+    parameters:
+      - $ref: "#/components/parameters/CourtroomSessionId"
+    post:
+      operationId: uploadCourtroomChunk
+      tags: [observability]
+      summary: R-31 Upload one audio chunk
+      description: |
+        Multipart upload of one audio segment (typically 1-3s of opus
+        from MediaRecorder). The server transcribes, runs the
+        objection-rules lookup, and may publish an ObjectionEvent on
+        the session's SSE channel. The endpoint returns 202 immediately
+        — processing is fire-and-forget so the recorder never blocks.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UploadCourtroomChunkRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /v1/courtroom/sessions/{sessionId}/events:
+    parameters:
+      - $ref: "#/components/parameters/CourtroomSessionId"
+    get:
+      operationId: streamCourtroomEvents
+      tags: [observability]
+      summary: R-32 Stream ObjectionEvents (SSE)
+      description: |
+        Server-Sent Events stream of `ObjectionEvent` payloads for the
+        session. Replays any buffered events past `?since=N`, then
+        attaches a live subscription. Events are ephemeral — buffered
+        in-memory and dropped at session end unless saved via R-33.
+      parameters:
+        - name: since
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: -1
+      responses:
+        "200":
+          description: SSE stream of objection events
+          content:
+            text/event-stream:
+              schema:
+                $ref: "#/components/schemas/ObjectionEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/courtroom/sessions/{sessionId}/end:
+    parameters:
+      - $ref: "#/components/parameters/CourtroomSessionId"
+    post:
+      operationId: endCourtroomSession
+      tags: [observability]
+      summary: R-33 End a Courtroom Mode session
+      description: |
+        Marks the session ended and drops the in-memory event buffer.
+        If the session was created with `consentTranscript: true` AND
+        the request sets `saveTranscript: true`, buffered events are
+        persisted to `objection_events` for later review. Otherwise
+        nothing is written.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EndCourtroomSessionRequest"
+      responses:
+        "200":
+          description: Ended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EndCourtroomSessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    CaseId:
+      name: caseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    FileId:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RunId:
+      name: runId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CourtroomSessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: Conflict (e.g. concurrent run already active)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+
+  schemas:
+    # ------------------------------------------------------------------
+    # Health
+    # ------------------------------------------------------------------
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    # ------------------------------------------------------------------
+    # Errors (§8.6)
+    # ------------------------------------------------------------------
+    ErrorCode:
+      type: string
+      enum:
+        - validation_error
+        - unauthorized
+        - forbidden
+        - not_found
+        - conflict
+        - rate_limited
+        - dependency_unavailable
+        - internal_error
+        - not_implemented
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              $ref: "#/components/schemas/ErrorCode"
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+          required: [code, message]
+      required: [error]
+
+    # ------------------------------------------------------------------
+    # Enums
+    # ------------------------------------------------------------------
+    RolePack:
+      type: string
+      enum: [defender, detective]
+      description: Briefcase ships `defender`; Beat will ship `detective`.
+    CaseStatus:
+      type: string
+      enum: [created, ingesting, ready, running, prepared, error, deleted]
+    RunStatus:
+      type: string
+      enum: [pending, running, completed, cancelled, error]
+    LegalSystem:
+      type: string
+      enum: [common, civil, religious, mixed, customary]
+    SourceType:
+      type: string
+      enum: [upload, drive, scan, audio]
+    ContradictionSeverity:
+      type: string
+      enum: [low, medium, high]
+    ContradictionType:
+      type: string
+      enum: [timestamp, identity, sequence, fact]
+
+    # ------------------------------------------------------------------
+    # Core domain models (§8.4)
+    # ------------------------------------------------------------------
+    JurisdictionContext:
+      type: object
+      description: Auto-detected jurisdiction context for the case (FR-050).
+      properties:
+        country:
+          type: string
+          description: ISO 3166-1 alpha-2 country code (e.g. "US", "GB", "IN").
+        region:
+          type: string
+          description: Subdivision code (e.g. "IL" for Illinois, "KA" for Karnataka).
+        legalSystem:
+          $ref: "#/components/schemas/LegalSystem"
+        language:
+          type: string
+          description: Primary language, ISO 639-1 (e.g. "en", "hi").
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+      required: [country, legalSystem, language, confidence]
+
+    Case:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        title:
+          type: string
+        description:
+          type: string
+        rolePack:
+          $ref: "#/components/schemas/RolePack"
+        jurisdictionContext:
+          $ref: "#/components/schemas/JurisdictionContext"
+        language:
+          type: string
+        status:
+          $ref: "#/components/schemas/CaseStatus"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, userId, title, rolePack, status, createdAt, updatedAt]
+
+    CaseFile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        caseId:
+          type: string
+          format: uuid
+        sourceType:
+          $ref: "#/components/schemas/SourceType"
+        driveFileId:
+          type: string
+        name:
+          type: string
+        mime:
+          type: string
+        sizeBytes:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+          minLength: 64
+          maxLength: 64
+        detectedLanguage:
+          type: string
+          description: ISO 639-1.
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - caseId
+        - sourceType
+        - name
+        - mime
+        - sizeBytes
+        - sha256
+        - createdAt
+
+    CaseFileDetail:
+      allOf:
+        - $ref: "#/components/schemas/CaseFile"
+        - type: object
+          properties:
+            signedUrl:
+              type: string
+              format: uri
+              description: Short-lived signed URL for the PDF viewer.
+            signedUrlExpiresAt:
+              type: string
+              format: date-time
+          required: [signedUrl, signedUrlExpiresAt]
+
+    Run:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        caseId:
+          type: string
+          format: uuid
+        rolePack:
+          $ref: "#/components/schemas/RolePack"
+        goal:
+          type: string
+        status:
+          $ref: "#/components/schemas/RunStatus"
+        cancelled:
+          type: boolean
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        errorMessage:
+          type: string
+        parentRunId:
+          type: string
+          format: uuid
+          description: |
+            Set when this run was forked from another via R-23 (G15
+            Time-Travel Debugger). Null for top-level runs.
+          nullable: true
+        branchedAtIdx:
+          type: integer
+          minimum: 0
+          description: |
+            The parent run event idx this run was forked from. Set
+            together with `parentRunId`. Null for top-level runs.
+          nullable: true
+      required: [id, caseId, rolePack, goal, status]
+
+    CaseDetail:
+      type: object
+      description: Full case payload for the case dashboard (R-02).
+      properties:
+        case:
+          $ref: "#/components/schemas/Case"
+        files:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaseFile"
+        latestRun:
+          $ref: "#/components/schemas/Run"
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artifact"
+      required: [case, files, artifacts]
+
+    Artifact:
+      type: object
+      description: |
+        Latest output of one subagent for a run. `data` matches the schema for
+        the artifact `kind` (e.g. `Timeline` for kind=`Timeline`).
+      properties:
+        id:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        subagent:
+          type: string
+        kind:
+          type: string
+          description: One of `Timeline`, `Gaps`, `CrossExamSet`, `Precedents`, etc.
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, runId, subagent, kind, data, createdAt]
+
+    CaseList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Case"
+        nextCursor:
+          type: string
+          description: Opaque cursor; absent on the last page.
+      required: [items]
+
+    # ------------------------------------------------------------------
+    # Request bodies
+    # ------------------------------------------------------------------
+    CreateCaseRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        rolePack:
+          $ref: "#/components/schemas/RolePack"
+      required: [title, rolePack]
+
+    UpdateCaseRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+      additionalProperties: false
+
+    UploadCaseFileRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+        sourceType:
+          $ref: "#/components/schemas/SourceType"
+        ocrText:
+          type: string
+          description: |
+            Pre-extracted text for `sourceType: scan` uploads (G9 — camera
+            scan + on-device OCR). The server stores this verbatim into
+            `case_files.ocr_text` and skips its own parse step. Pages are
+            separated by form-feed (`\f`) so downstream chunking can recover
+            page boundaries.
+        pageCount:
+          type: integer
+          minimum: 1
+          description: |
+            Number of scanned pages combined into the uploaded image. Optional
+            metadata for `sourceType: scan` so the UI can show "3 pages
+            scanned" without re-parsing.
+      required: [file, sourceType]
+
+    IngestDriveFileRequest:
+      type: object
+      properties:
+        driveFileId:
+          type: string
+          minLength: 1
+      required: [driveFileId]
+
+    IngestDriveFolderRequest:
+      type: object
+      properties:
+        driveFolderId:
+          type: string
+          minLength: 1
+      required: [driveFolderId]
+
+    StartRunRequest:
+      type: object
+      properties:
+        goal:
+          type: string
+          description: Optional plain-English goal. Defaults to the case's auto-generated goal.
+        idempotencyKey:
+          type: string
+          format: uuid
+          description: |
+            Required UUID. Repeated POSTs with the same key return the existing
+            `runId` instead of starting a second run (NFR-R-002).
+      required: [idempotencyKey]
+
+    StartRunResponse:
+      type: object
+      properties:
+        runId:
+          type: string
+          format: uuid
+        idempotent:
+          type: boolean
+          description: True when the request matched an existing idempotency key.
+      required: [runId, idempotent]
+
+    CancelRunResponse:
+      type: object
+      properties:
+        runId:
+          type: string
+          format: uuid
+        cancellationRequestedAt:
+          type: string
+          format: date-time
+      required: [runId, cancellationRequestedAt]
+
+    GoogleOAuthCallbackRequest:
+      type: object
+      properties:
+        code:
+          type: string
+        state:
+          type: string
+        codeVerifier:
+          type: string
+      required: [code]
+
+    GoogleOAuthCallbackResponse:
+      type: object
+      properties:
+        connected:
+          type: boolean
+        email:
+          type: string
+          format: email
+      required: [connected]
+
+    # ------------------------------------------------------------------
+    # Citations & artifact data shapes (§9.4)
+    # ------------------------------------------------------------------
+    CitationSpan:
+      type: object
+      description: Anchor inside a source — a page+character range or video timestamp.
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          description: 1-indexed PDF page number.
+        startChar:
+          type: integer
+          minimum: 0
+        endChar:
+          type: integer
+          minimum: 0
+        startMs:
+          type: integer
+          minimum: 0
+          description: Start timestamp in milliseconds for audio/video sources.
+        endMs:
+          type: integer
+          minimum: 0
+
+    Citation:
+      type: object
+      description: Verifiable citation (FR-072). Unverified citations are dropped before render.
+      properties:
+        sourceType:
+          type: string
+          enum: [case_file, web, transcript, video]
+        sourceId:
+          type: string
+          description: Foreign key into the source table (e.g. `case_files.id`).
+        span:
+          $ref: "#/components/schemas/CitationSpan"
+        verifiedQuote:
+          type: string
+        verifiedAt:
+          type: string
+          format: date-time
+      required: [sourceType, sourceId, verifiedQuote, verifiedAt]
+
+    TimelineEvent:
+      type: object
+      description: One event in the Timeline artifact (FR-040).
+      properties:
+        date:
+          type: string
+          description: ISO-8601 date or datetime as emitted by the agent.
+        title:
+          type: string
+        source:
+          $ref: "#/components/schemas/Citation"
+        confidence:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 1
+      required: [date, title, source, confidence]
+
+    Contradiction:
+      type: object
+      description: One row in the Gaps artifact (FR-041, FR-060).
+      properties:
+        claim:
+          type: string
+        sourceA:
+          $ref: "#/components/schemas/Citation"
+        sourceB:
+          $ref: "#/components/schemas/Citation"
+        severity:
+          $ref: "#/components/schemas/ContradictionSeverity"
+        type:
+          $ref: "#/components/schemas/ContradictionType"
+        explanation:
+          type: string
+      required: [claim, sourceA, sourceB, severity]
+
+    Question:
+      type: object
+      description: One cross-exam question (FR-042).
+      properties:
+        text:
+          type: string
+        rationale:
+          type: string
+        source:
+          $ref: "#/components/schemas/Citation"
+        expectedImpeachment:
+          type: string
+      required: [text, rationale, source, expectedImpeachment]
+
+    PrecedentCase:
+      type: object
+      description: One precedent in the Precedents artifact (FR-043).
+      properties:
+        citation:
+          type: string
+        jurisdiction:
+          type: string
+        holding:
+          type: string
+        whyRelevant:
+          type: string
+        sourceUrl:
+          type: string
+          format: uri
+        verifiedQuote:
+          type: string
+      required: [citation, jurisdiction, holding, whyRelevant, sourceUrl, verifiedQuote]
+
+    # ------------------------------------------------------------------
+    # AgentEvent — discriminated union on `type` (§8.4)
+    # ------------------------------------------------------------------
+    AgentEventType:
+      type: string
+      enum:
+        - run_started
+        - planner_step
+        - subagent_started
+        - tool_call
+        - tool_result
+        - tool_progress
+        - partial_result
+        - subagent_completed
+        - model_routed
+        - cache_hit
+        - cost_update
+        - policy_drop
+        - judge_score
+        - guardrail_warning
+        - retry_exhausted
+        - final_result
+        - error
+        - done
+
+    ToolCallStatus:
+      type: string
+      enum: [pending, running, success, error]
+
+    AgentEventBase:
+      type: object
+      properties:
+        idx:
+          type: integer
+          minimum: 0
+          description: Monotonic index within the run, starting at 0.
+        type:
+          $ref: "#/components/schemas/AgentEventType"
+      required: [idx, type]
+
+    AgentEventRunStarted:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: run_started
+            runId:
+              type: string
+              format: uuid
+            rolePack:
+              $ref: "#/components/schemas/RolePack"
+            goal:
+              type: string
+          required: [type, runId, rolePack, goal]
+
+    AgentEventPlannerStep:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: planner_step
+            text:
+              type: string
+            subagentsPlanned:
+              type: array
+              items:
+                type: string
+          required: [type, text, subagentsPlanned]
+
+    AgentEventSubagentStarted:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: subagent_started
+            subagent:
+              type: string
+            pane:
+              type: integer
+              minimum: 0
+              description: 0-indexed pane slot in the 4-pane dashboard.
+          required: [type, subagent, pane]
+
+    AgentEventToolCall:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: tool_call
+            subagent:
+              type: string
+            tool:
+              type: string
+            args:
+              type: object
+              additionalProperties: true
+            status:
+              $ref: "#/components/schemas/ToolCallStatus"
+          required: [type, subagent, tool, args, status]
+
+    AgentEventToolResult:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: tool_result
+            subagent:
+              type: string
+            tool:
+              type: string
+            resultPreview:
+              type: string
+          required: [type, subagent, tool, resultPreview]
+
+    AgentEventPartialResult:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: partial_result
+            subagent:
+              type: string
+            data:
+              type: object
+              additionalProperties: true
+          required: [type, subagent, data]
+
+    AgentEventSubagentCompleted:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: subagent_completed
+            subagent:
+              type: string
+            data:
+              type: object
+              additionalProperties: true
+              description: |
+                Final artifact payload for the subagent. Shape matches the
+                subagent's declared artifact schema (Timeline, Gaps,
+                CrossExamSet, Precedents, etc.).
+          required: [type, subagent, data]
+
+    AgentEventFinalResult:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: final_result
+            data:
+              type: object
+              additionalProperties: true
+          required: [type, data]
+
+    AgentEventError:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: error
+            subagent:
+              type: string
+            message:
+              type: string
+          required: [type, message]
+
+    AgentEventToolProgress:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: tool_progress
+            subagent:
+              type: string
+            tool:
+              type: string
+            progress:
+              type: number
+              minimum: 0
+              maximum: 1
+              description: Estimated completion fraction, capped at 0.95 while running.
+            note:
+              type: string
+            elapsedMs:
+              type: integer
+              minimum: 0
+            seq:
+              type: integer
+              minimum: 0
+            meta:
+              type: object
+              additionalProperties: true
+          required: [type, tool, progress, elapsedMs, seq]
+
+    AgentEventModelRouted:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: model_routed
+            subagent:
+              type: string
+            taskKind:
+              type: string
+            chosenModel:
+              type: string
+            provider:
+              type: string
+            rationale:
+              type: string
+            candidates:
+              type: array
+              items:
+                type: object
+                properties:
+                  modelId:
+                    type: string
+                  provider:
+                    type: string
+                  rank:
+                    type: integer
+                required: [modelId, provider, rank]
+            predictedCostUsd:
+              type: number
+          required: [type, taskKind, chosenModel, provider, rationale, candidates, predictedCostUsd]
+
+    AgentEventCacheHit:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: cache_hit
+            subagent:
+              type: string
+            taskKind:
+              type: string
+            similarity:
+              type: number
+            cacheKey:
+              type: string
+            costSavedUsd:
+              type: number
+            lastUsedAt:
+              type: string
+              format: date-time
+          required: [type, taskKind, similarity, cacheKey, costSavedUsd, lastUsedAt]
+
+    AgentEventCostUpdate:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: cost_update
+            totalUsd:
+              type: number
+            byModel:
+              type: object
+              additionalProperties:
+                type: number
+            byTool:
+              type: object
+              additionalProperties:
+                type: number
+            byPhase:
+              type: object
+              additionalProperties:
+                type: number
+          required: [type, totalUsd, byModel, byTool, byPhase]
+
+    AgentEventPolicyDrop:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: policy_drop
+            subagent:
+              type: string
+            rule:
+              type: string
+              description: |
+                Constitutional rule that fired. e.g. `jurisdiction-mismatch`,
+                `no-pii-email`, `unverified-citations`.
+            droppedPayloadPreview:
+              type: string
+              description: |
+                Redacted preview of the dropped value — never the raw
+                payload (the gate exists precisely to keep that out of
+                logs and the audit bundle).
+          required: [type, subagent, rule, droppedPayloadPreview]
+
+    AgentEventJudgeScore:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: judge_score
+            subagent:
+              type: string
+            score:
+              type: number
+              minimum: 0
+              maximum: 1
+            rationale:
+              type: string
+            weakFields:
+              type: array
+              items:
+                type: string
+            threshold:
+              type: number
+              minimum: 0
+              maximum: 1
+            passed:
+              type: boolean
+          required: [type, subagent, score, rationale, weakFields, threshold, passed]
+
+    AgentEventGuardrailWarning:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: guardrail_warning
+            state:
+              type: string
+              enum: [degrade, halt]
+            remainingUsd:
+              type: number
+            ceilingUsd:
+              type: number
+            recommendation:
+              type: string
+          required: [type, state, remainingUsd, ceilingUsd, recommendation]
+
+    AgentEventRetryExhausted:
+      description: |
+        RetryPolicy budget exhausted (NFR-E-005). Carries the structured
+        reformulation history so the Glass Box can render every attempt
+        the engine tried — including the per-attempt reformulation
+        directive that fed back into the next model call. The artifact
+        still flows through (best-effort) via subagent_completed; this
+        event tells the user the quality bar wasn't met.
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: retry_exhausted
+            subagent:
+              type: string
+            attempts:
+              type: array
+              items:
+                type: object
+                properties:
+                  attempt:
+                    type: integer
+                    minimum: 1
+                  ok:
+                    type: boolean
+                  reason:
+                    type: string
+                  reformulation:
+                    type: string
+                  elapsedMs:
+                    type: integer
+                    minimum: 0
+                required: [attempt, ok, elapsedMs]
+          required: [type, subagent, attempts]
+
+    AgentEventAgentMessage:
+      description: |
+        Inter-subagent bus message (G23 NFR-E-014). Mirrors the
+        `agent_messages` row that was just persisted; the Glass Box
+        renders these alongside tool_call / partial_result so the
+        operator can follow the inter-subagent conversation in real
+        time. `to` is `*` for broadcast.
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: agent_message
+            from:
+              type: string
+            to:
+              type: string
+            idx:
+              type: integer
+              minimum: 0
+            body:
+              type: object
+              additionalProperties: true
+          required: [type, from, to, idx, body]
+
+    McpServerDescriptor:
+      type: object
+      description: One entry in the G23 MCP catalog.
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        title:
+          type: string
+        tools:
+          type: array
+          items:
+            type: string
+      required: [id, version, title, tools]
+
+    McpServerList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/McpServerDescriptor"
+      required: [items]
+
+    WebRtcSignalInput:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [offer, answer, ice]
+        payload:
+          type: object
+          additionalProperties: true
+      required: [kind, payload]
+
+    # ------------------------------------------------------------------
+    # G14 Courtroom Mode (R-30..R-33)
+    # ------------------------------------------------------------------
+    CreateCourtroomSessionRequest:
+      type: object
+      properties:
+        caseId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional case the session is anchored to.
+        jurisdictionCountry:
+          type: string
+          enum: [US, UK, IN]
+          default: US
+        consentTranscript:
+          type: boolean
+          default: false
+          description: |
+            When true, transcript snippets are included in ObjectionEvents
+            and may be persisted at session-end (R-33). When false,
+            snippets are redacted on the wire and never persisted.
+      required: [jurisdictionCountry, consentTranscript]
+
+    CourtroomSession:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        caseId:
+          type: string
+          format: uuid
+          nullable: true
+        jurisdictionCountry:
+          type: string
+          enum: [US, UK, IN]
+        consentTranscript:
+          type: boolean
+        transport:
+          type: string
+          enum: [http_chunks, webrtc]
+          description: Audio transport in use. http_chunks is the fallback when WebRTCGateway is unavailable.
+        startedAt:
+          type: string
+          format: date-time
+      required: [id, jurisdictionCountry, consentTranscript, transport, startedAt]
+
+    UploadCourtroomChunkRequest:
+      type: object
+      properties:
+        audio:
+          type: string
+          format: binary
+          description: Audio segment (audio/webm or audio/wav).
+        language:
+          type: string
+          description: Optional ISO-639-1 language hint passed to the transcriber.
+      required: [audio]
+
+    ObjectionEvent:
+      type: object
+      properties:
+        idx:
+          type: integer
+          description: Monotonic per-session index, used for SSE resumption (?since=N).
+        ts:
+          type: integer
+          description: Unix-epoch milliseconds when the cue fired on the server.
+        ruleKey:
+          type: string
+          description: Stable id from the jurisdiction rules catalog (e.g. "us.fre.802").
+        ruleLabel:
+          type: string
+        citation:
+          type: string
+          description: Human-readable citation (e.g. "Fed. R. Evid. 802").
+        severity:
+          type: string
+          enum: [info, warn, strong]
+        transcriptSnippet:
+          type: string
+          description: |
+            Snippet that triggered the cue. Redacted to a placeholder
+            when the session was created with consentTranscript=false.
+        suggestion:
+          type: string
+          maxLength: 140
+          description: <=140 char plain-English action prompt.
+      required: [idx, ts, ruleKey, ruleLabel, citation, severity, transcriptSnippet, suggestion]
+
+    EndCourtroomSessionRequest:
+      type: object
+      properties:
+        saveTranscript:
+          type: boolean
+          default: false
+          description: |
+            When true AND the session was created with consentTranscript=true,
+            buffered ObjectionEvents are persisted to objection_events for
+            later review. Otherwise nothing is written.
+
+    EndCourtroomSessionResponse:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        eventCount:
+          type: integer
+        saved:
+          type: boolean
+      required: [sessionId, eventCount, saved]
+
+    WebRtcSignalDrain:
+      type: object
+      properties:
+        runId:
+          type: string
+          format: uuid
+        peer:
+          type: string
+          enum: [presenter, audience]
+        messages:
+          type: array
+          items:
+            type: object
+            properties:
+              kind:
+                type: string
+                enum: [offer, answer, ice]
+              from:
+                type: string
+                enum: [presenter, audience]
+              ts:
+                type: integer
+              payload:
+                type: object
+                additionalProperties: true
+            required: [kind, from, ts, payload]
+      required: [runId, peer, messages]
+
+    AgentEventDone:
+      allOf:
+        - $ref: "#/components/schemas/AgentEventBase"
+        - type: object
+          properties:
+            type:
+              type: string
+              const: done
+            runId:
+              type: string
+              format: uuid
+            cancelled:
+              type: boolean
+          required: [type, runId]
+
+    AgentEvent:
+      description: |
+        Discriminated union of agent events streamed over R-11. The `type`
+        field selects the variant. `idx` is monotonic per run; SSE clients
+        resume by sending `Last-Event-ID: <idx>` (or `?since=<idx>`).
+      oneOf:
+        - $ref: "#/components/schemas/AgentEventRunStarted"
+        - $ref: "#/components/schemas/AgentEventPlannerStep"
+        - $ref: "#/components/schemas/AgentEventSubagentStarted"
+        - $ref: "#/components/schemas/AgentEventToolCall"
+        - $ref: "#/components/schemas/AgentEventToolResult"
+        - $ref: "#/components/schemas/AgentEventToolProgress"
+        - $ref: "#/components/schemas/AgentEventPartialResult"
+        - $ref: "#/components/schemas/AgentEventSubagentCompleted"
+        - $ref: "#/components/schemas/AgentEventModelRouted"
+        - $ref: "#/components/schemas/AgentEventCacheHit"
+        - $ref: "#/components/schemas/AgentEventCostUpdate"
+        - $ref: "#/components/schemas/AgentEventPolicyDrop"
+        - $ref: "#/components/schemas/AgentEventJudgeScore"
+        - $ref: "#/components/schemas/AgentEventGuardrailWarning"
+        - $ref: "#/components/schemas/AgentEventRetryExhausted"
+        - $ref: "#/components/schemas/AgentEventAgentMessage"
+        - $ref: "#/components/schemas/AgentEventFinalResult"
+        - $ref: "#/components/schemas/AgentEventError"
+        - $ref: "#/components/schemas/AgentEventDone"
+      discriminator:
+        propertyName: type
+        mapping:
+          run_started: "#/components/schemas/AgentEventRunStarted"
+          planner_step: "#/components/schemas/AgentEventPlannerStep"
+          subagent_started: "#/components/schemas/AgentEventSubagentStarted"
+          tool_call: "#/components/schemas/AgentEventToolCall"
+          tool_result: "#/components/schemas/AgentEventToolResult"
+          tool_progress: "#/components/schemas/AgentEventToolProgress"
+          partial_result: "#/components/schemas/AgentEventPartialResult"
+          subagent_completed: "#/components/schemas/AgentEventSubagentCompleted"
+          model_routed: "#/components/schemas/AgentEventModelRouted"
+          cache_hit: "#/components/schemas/AgentEventCacheHit"
+          cost_update: "#/components/schemas/AgentEventCostUpdate"
+          policy_drop: "#/components/schemas/AgentEventPolicyDrop"
+          judge_score: "#/components/schemas/AgentEventJudgeScore"
+          guardrail_warning: "#/components/schemas/AgentEventGuardrailWarning"
+          retry_exhausted: "#/components/schemas/AgentEventRetryExhausted"
+          agent_message: "#/components/schemas/AgentEventAgentMessage"
+          final_result: "#/components/schemas/AgentEventFinalResult"
+          error: "#/components/schemas/AgentEventError"
+          done: "#/components/schemas/AgentEventDone"
+
+    # ------------------------------------------------------------------
+    # Ingest events (R-07/R-08 SSE)
+    # ------------------------------------------------------------------
+    IngestEvent:
+      type: object
+      description: |
+        STUB shape for Drive ingest progress events. Refined by G8 — Drive
+        Ingest. `type` = `progress` while files are being fetched/OCR'd, then
+        `file_ingested` per file, then `done`.
+      properties:
+        idx:
+          type: integer
+          minimum: 0
+        type:
+          type: string
+          enum: [progress, file_ingested, error, done]
+        file:
+          $ref: "#/components/schemas/CaseFile"
+        message:
+          type: string
+        progress:
+          type: number
+          minimum: 0
+          maximum: 1
+      required: [idx, type]
+
+    # ------------------------------------------------------------------
+    # Observability stubs (G21+)
+    # ------------------------------------------------------------------
+    RunCostBreakdown:
+      type: object
+      description: Live cost-so-far for a run (R-20).
+      properties:
+        runId:
+          type: string
+          format: uuid
+        totalUsd:
+          type: number
+        byModel:
+          type: object
+          additionalProperties:
+            type: number
+        byTool:
+          type: object
+          additionalProperties:
+            type: number
+        byPhase:
+          type: object
+          additionalProperties:
+            type: number
+        updatedAt:
+          type: string
+          format: date-time
+      required: [runId, totalUsd, updatedAt]
+
+    RunTrace:
+      type: object
+      description: STUB. OpenTelemetry trace JSON for a run (R-22).
+      properties:
+        runId:
+          type: string
+          format: uuid
+        spans:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+      required: [runId, spans]
+
+    BranchRunRequest:
+      type: object
+      properties:
+        branchedAtIdx:
+          type: integer
+          minimum: 0
+        editedInputs:
+          type: object
+          additionalProperties: true
+      required: [branchedAtIdx]
+
+    BranchRunResponse:
+      type: object
+      properties:
+        childRunId:
+          type: string
+          format: uuid
+        parentRunId:
+          type: string
+          format: uuid
+        branchedAtIdx:
+          type: integer
+          minimum: 0
+      required: [childRunId, parentRunId, branchedAtIdx]
+
+    AgentMessage:
+      type: object
+      description: Inter-subagent bus message (G23 NFR-E-014, R-23/R-24).
+      properties:
+        id:
+          type: string
+        runId:
+          type: string
+          format: uuid
+        from:
+          type: string
+        to:
+          type: string
+          description: Subagent name or `*` for broadcast.
+        body:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, runId, from, to, body, createdAt]
+
+    AgentMessageInput:
+      type: object
+      properties:
+        from:
+          type: string
+        to:
+          type: string
+        body:
+          type: object
+          additionalProperties: true
+      required: [from, to, body]
+
+    AgentMessageList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentMessage"
+      required: [items]
+
+    CacheStats:
+      type: object
+      description: Semantic cache statistics (R-25).
+      properties:
+        hitRatio:
+          type: number
+          minimum: 0
+          maximum: 1
+        hits:
+          type: integer
+          minimum: 0
+        misses:
+          type: integer
+          minimum: 0
+        savingsUsd:
+          type: number
+        topEntries:
+          type: array
+          items:
+            type: object
+            properties:
+              cacheKey:
+                type: string
+              hits:
+                type: integer
+              lastUsedAt:
+                type: string
+                format: date-time
+            required: [cacheKey, hits, lastUsedAt]
+      required: [hitRatio, hits, misses, savingsUsd, topEntries]
+
+    ReplayCase:
+      type: object
+      description: Auto-saved replay fixture (G23 NFR-E-016, R-26).
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, label, createdAt]
+
+    ReplayCaseList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplayCase"
+      required: [items]
+
+    ReplayRunResult:
+      type: object
+      description: Replay diff vs golden output (G23 NFR-E-016, R-27).
+      properties:
+        replayCaseId:
+          type: string
+        runId:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            UUID of the freshly executed replay run. `null` only when
+            the harness could not start (missing originating run /
+            fixture lacks a runId).
+        passed:
+          type: boolean
+        diff:
+          type: object
+          description: Wrapped diff items so the schema is stable
+            even when no diffs were observed.
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                properties:
+                  artifact:
+                    type: string
+                  reason:
+                    type: string
+                required: [artifact, reason]
+          required: [items]
+      required: [replayCaseId, passed, diff]
+
+    PromptVersion:
+      type: object
+      description: One prompt version + variant (G23 NFR-E-012, R-28).
+      properties:
+        promptKey:
+          type: string
+        version:
+          type: string
+        variant:
+          type: string
+          nullable: true
+          description: |
+            A/B variant tag. `null` for the canonical (no-variant) row,
+            which is also the fallback when no tenant-sticky variant
+            wins the pick.
+        active:
+          type: boolean
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required: [promptKey, version, active, createdAt]
+
+    PromptVersionList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromptVersion"
+      required: [items]
+
+    ActivatePromptRequest:
+      type: object
+      properties:
+        version:
+          type: string
+        variant:
+          type: string
+      required: [version, variant]
